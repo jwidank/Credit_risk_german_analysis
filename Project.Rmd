@@ -1,0 +1,2958 @@
+---
+title: "Credit risk project - Data Mining"
+author: "Jan Widanka, Bartosz Tuzel"
+output:
+  html_document:
+    number_sections: yes
+---
+
+
+# Part I
+## Exploratory Data Analysis
+
+### Libraries used in the first part
+
+```{r, message=FALSE}
+library(caret)
+library(ISLR)
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+library(ipred)
+library(tree)
+library(randomForest)
+library(mlbench)
+library(ggplot2)
+library(tidyr)
+library(RColorBrewer)
+library(gridExtra)
+library(latex2exp)
+library(reshape2)
+library(GGally)
+library(glmnet)
+library(boot)
+library(grid)
+library(verification)
+library(ggcorrplot)
+library(MASS)
+library(knitr)
+library(kableExtra)
+library(tibble)
+library(stringr)
+library(magrittr)
+library(factoextra)
+library(clValid)
+library(fpc)
+library(scatterpie)
+library(egg)
+library(dbscan)
+library(fclust)
+library(FactoMineR)
+```
+
+### Loading the data about the credit risk
+
+```{r, size="footnotesize"}
+credit_risk <- read.table("http://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data")
+```
+
+### Detailed information about the data
+The German credit risk dataset contains 1000 cases, 20 features and 2 classes (qualified for a loan and not qualified for a loan). The formula for $DM$ stands for Deutsche Mark. The attributes are described in the following way:
+
+- V1: Current condition of the checking account (ordinal)
+  + A11: < DM,
+  + A12: 0 $\leq$ ... < 200 DM,  
+  + A13: $\geq$ 200 DM,
+  + A14: no checking account.
+- V2: Duration in month (numerical).
+- V3: Credit history (nominal)
+  + A30: no credits taken,
+  + A31: all credits paid back duly,
+  + A32: existing credits paid back duly till now,
+  + A33: delay in paying off in the past,
+  + A34: other credit existing.
+- V4: Purpose (nominal)
+  + A40: new car, 
+  + A41: used car,
+  + A42: furniture,
+  + A43: television,
+  + A44: household appliances,
+  + A45: repairs,
+  + A46: education,
+  + A47: vacation,
+  + A48: retraining, 
+  + A49: business,
+  + A410: others.
+- V5: Amount of credit (numerical).
+- V6: Bonds (ordinal)
+  + A61: < 100 DM,
+  + A62: 100 $\leq$ ... < 500 DM,
+  + A63: 500 $\leq$ ... < 1000 DM,
+  + A64: $\geq$ 1000 DM,
+  + A65: No bonds.
+- V7: Employed since (ordinal)
+  + A71: unemployed,
+  + A72: < 1 year,
+  + A73: 1 $\leq$ ... < 4 years,
+  + A74: 4 $\leq$ ... < 7 years,
+  + A75: $\geq$ 7 years.
+- V8: Percentage of disposable income allocated to installment payments (numerical).
+- V9: Personal status and gender (nominal)
+  + A91: male - divorced/separated,
+  + A92: female - divorced/separated/married,
+  + A93: male - single,
+  + A94: male - married/widowed,
+  + A95: female - single.
+- V10: Guarantors (nominal)
+  + A101: none,
+  + A102: co-applicant,
+  + A103: guarantor.
+- V11: Current place of residence since (numerical).
+- V12: Property (nominal)
+  + A121: real estate,
+  + A122: does not have a real estate (A121), but has life insurance,
+  + A123: does not have any of the previous properties (A121, A122), but has a car,
+  + A124: unknown.
+- V13: Age (numerical).
+- V14: Alternative installment arrangements (nominal)
+  + A141: bank,
+  + A142: stores,
+  + A143: none.
+- V15: Housing (nominal)
+  + A151: rent,
+  + A152: ownership,
+  + A153: no cost.
+- V16: Quantity of current credits with this financial institution (numerical).
+- V17: Job (ordinal)
+  + A171: unemployed,
+  + A172: unskilled,
+  + A173: skilled employee,
+  + A174: highly qualified employee.
+- V18: Number of individuals responsible for providing maintenance.
+- V19: Phone (nominal)
+  + A191: none,
+  + A192: yes.
+- V20: Foreign worker (nominal)
+  + A201: yes,
+  + A202: no.
+
+As we can see analyzed dataset contains 8 quantitative features and 12 qualitative attributes, from which we can distinguish 4 ordinal and 8 nominal variables. The last feature contains classified customers. $1$ represents a customer that is classified as good in case of getting a loan and $2$ refers to a bad customer in case of getting a loan.
+
+
+### Checking if we have any missing values in the data
+```{r}
+sum(is.na(credit_risk))
+```
+As we can see our dataset does not contain any missing values.
+
+### Changing the names of the columns
+```{r}
+colnames(credit_risk) <- c('Checking_account', 'Duration_in_months', 'Credit_history',
+                           'Purpose', 'Credit_amount', 'Bonds', 'Present_employment',
+                           'Installment_rate','Personal_status','Other_debtors',
+                           'Present_residence','Property', 'Age', 'Other_installment',
+                           'Housing','Existing_credits', 'Job', 'Number_of_people',
+                           'Telephone','Foreign_worker', "Response")
+```
+
+### Changing our classes
+To perform further analysis we need to change the $\textit{Response}$ labels from numeric to factor. For this purpose we will use the function $\textit{as.factor}$:
+
+```{r}
+credit_risk$Response <- as.factor(credit_risk$Response)
+attach(credit_risk)
+```
+
+## Class distribution
+We will start our analysis from class distribution.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE}
+class_distribution <- ggplot(credit_risk, aes(Response, ..count..)) +
+  geom_bar(aes(fill = Response), position = "dodge") +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  labs(title="Class distribution", x ="Response", y = "Count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust=0.5))
+
+class_distribution
+```
+
+We can see that there are more customers, who are classified as $\textit{Good}$ in case of getting a loan. There are exactly $700$ clients in this case. The value $300$ stands for customers, who did not receive a loan.
+
+### Useless variables
+
+We have a variable containing the information about the telephone, so if the customer has a telephone or not. It may be useless, but we are going to see it in further analysis.
+
+
+## Summary statistics
+
+To see detailed statistics extracted from our dataset, to be precise only the numeric variables, we will return the most common summary statistics. 
+
+```{r, warning=FALSE, echo=FALSE}
+summary_statistics <- function(x){
+  statistics <- c(min(x), quantile(x, 0.25), median(x), mean(x), sd(x), max(x), 
+                  quantile(x, 0.75), IQR(x))
+  names(statistics) <- c('Min:', 'Q1:', "Median: ", 'Mean:', 'Std:', 'Max:','Q3:','IQR:')
+
+  data_frame <- data.frame(statistics, check.names = FALSE)
+  
+  return(data_frame)
+}
+
+credit_amount_stats <- round(summary_statistics(credit_risk$Credit_amount), 2)
+duration_stats <- round(summary_statistics(credit_risk$Duration_in_months), 2)
+age_stats <- round(summary_statistics(credit_risk$Age), 2)
+
+kable(list(credit_amount_stats, duration_stats, age_stats),
+             format = 'html',
+             col.names = c(" ", " ", " ")) %>%
+  kable_styling(full_width = FALSE, latex_options = 'scale_down') %>%
+  add_header_above(c("Credit amount", "Duration", "Age"), align='c') %>%
+  column_spec(1, width = "8.5em") %>%
+  column_spec(2, width = "8em") %>%
+  column_spec(3, width = "8em")
+```
+
+From the table we can see that the oldest customer in $\textit{credit_risk}$ dataset has $75$ years, when the youngest has only $19$ years. Moreover looking at $\textit{Credit amount}$ we can see that the maximum amount of credit is above $18.000$ $DM$. 
+
+## Graphs for qualitative variables
+In this part of exploratory data analysis we will check distributions of qualitative features taking into account class membership.
+
+### Purpose
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+purpose_general <- ggplot(credit_risk, aes(Purpose, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits = c("A40", "A41", "A42", "A43", 
+                              "A44", "A45", "A46", "A47", 
+                              "A48", "A49", "A410"),
+                      labels = c("new car", "used car", "furniture", "television", 
+                                 "household appliances", "repairs", 
+                                 "education", "vacation",
+                                 "retraining", "business", "others")) +  
+  labs(x = 'Purpose',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+purpose_response <- ggplot(credit_risk, aes(Purpose, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits = c("A40", "A41", "A42", "A43", 
+                              "A44", "A45", "A46", "A47", 
+                              "A48", "A49", "A410"),
+                      labels = c("new car", "used car", "furniture", "television", 
+                                 "household appliances", "repairs", 
+                                 "education", "vacation",
+                                 "retraining", "business", "others")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                      labels = c("Good", "Bad"),
+                      values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Purpose',
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(purpose_general, purpose_response, ncol=2)
+```
+
+As we can see the most common purpose of the credit is television, other very popular reasons are furniture, and new car. 
+In our dataset there is no observation with purpose vacation. 
+
+### Personal status
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+personal_status_general <- ggplot(credit_risk, aes(Personal_status, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A91", "A92", "A93", "A94", "A95"),
+                                       labels=c("male - divorced/separated", 
+                                                "female - divorced/separated/married", 
+                                                "male - single", 
+                                                "male - married/widowed",
+                                                "female - single")) +
+  labs(x = 'Personal status',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+personal_status_response <- ggplot(credit_risk, aes(Personal_status, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A91", "A92", "A93", "A94", "A95"),
+                                       labels=c("male - divorced/separated", 
+                                                "female - divorced/separated/married", 
+                                                "male - single", 
+                                                "male - married/widowed",
+                                                "female - single")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Personal status',
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(personal_status_general, personal_status_response, ncol=2)
+```
+
+Those who apply for a credit (based on personal status) the most often are single mens and there is no woman who is single and 
+applies for a credit.
+
+### Checking account
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+checking_account_general <- ggplot(credit_risk, aes(Checking_account, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A11", "A12", "A13", "A14"),
+                   labels=c("< 0 DM", 
+                            TeX(r"(0 $\leq$ ... < 200 DM)"), 
+                            TeX(r"($\geq$ 200 DM)"),
+                            "no checking account")) +
+  labs(x = 'Checking account',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+checking_account_response <- ggplot(credit_risk, aes(Checking_account, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A11", "A12", "A13", "A14"),
+                   labels=c("< 0 DM", 
+                            TeX(r"(0 $\leq$ ... < 200 DM)"), 
+                            TeX(r"($\geq$ 200 DM)"),
+                            "no checking account")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Checking account',
+       y = "Count") +
+  theme(
+    legend.position = c(.05, .95),
+    legend.justification = c("left", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(checking_account_general, checking_account_response, ncol=2)
+```
+
+Based on this category, it can be concluded that most loan applications come from people who do not have a checking account and 
+such people in the vast majority of cases get positive response. We can also see that those who have negative checking account 
+get negative response almost as often as possitive. As we could assume those who have the most in thair checking account, 
+apply for credit least often.
+
+### Credit history
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_history_general <- ggplot(credit_risk, aes(Credit_history, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A30", "A31", "A32", "A33", "A34"),
+                   labels=c("no credits taken", 
+                            "all credits paid back duly", 
+                            "existing credits paid back duly till now",
+                            "delay in paying off in the past",
+                            "other credit existing")) +
+  labs(x = 'Credit history',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+credit_history_response <- ggplot(credit_risk, aes(Credit_history, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A30", "A31", "A32", "A33", "A34"),
+                   labels=c("no credits taken", 
+                            "all credits paid back duly", 
+                            "existing credits paid back duly till now",
+                            "delay in paying off in the past",
+                            "other credit existing")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Credit history',
+       y = "Count") +
+  theme(
+    legend.position = c(.05, .95),
+    legend.justification = c("left", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(credit_history_general, credit_history_response, ncol=2)
+```
+
+Looking at this category, most common applicants are those who paid their debts duly till now.
+
+### Bonds
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+bonds_general <- ggplot(credit_risk, aes(Bonds, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A61", "A62", "A63", "A64", "A65"),
+                   labels=c("< 100 DM", 
+                            TeX(r"(100 $\leq$ ... < 500 DM)"), 
+                            TeX(r"(500 $\leq$ ... < 1000 DM)"),
+                            TeX(r"($\geq$ 1000 DM)"),
+                            "No bonds")) + 
+  labs(x = 'Bonds',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+bonds_response <- ggplot(credit_risk, aes(Bonds, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A61", "A62", "A63", "A64", "A65"),
+                   labels=c("< 100 DM", 
+                            TeX(r"(100 $\leq$ ... < 500 DM)"), 
+                            TeX(r"(500 $\leq$ ... < 1000 DM)"),
+                            TeX(r"($\geq$ 1000 DM)"),
+                            "No bonds")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Bonds',
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(bonds_general, bonds_response, ncol=2)
+```
+
+Most applicants for a loan are those who have less than $100$ $DMs$ in bonds and as it can be assumed the more money someone have 
+in bonds, the less often apply for a credit.
+
+### Present employment (since ...)
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+present_employment_general <- ggplot(credit_risk, aes(Present_employment, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A71", "A72", "A73", "A74", "A75"),
+                   labels=c("unemployed", 
+                            "< 1 year", 
+                            TeX(r"(1 $\leq$ ... < 4 years)"),
+                            TeX(r"(4 $\leq$ ... < 7 years)"),
+                            TeX(r"($\geq$ 7 years)"))) +
+  labs(x = 'Present employment',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+present_employment_response <- ggplot(credit_risk, aes(Present_employment, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A71", "A72", "A73", "A74", "A75"),
+                   labels=c("unemployed", 
+                            "< 1 year", 
+                            TeX(r"(1 $\leq$ ... < 4 years)"),
+                            TeX(r"(4 $\leq$ ... < 7 years)"),
+                            TeX(r"($\geq$ 7 years)"))) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = 'Present employment',
+       y = "Count") +
+  theme(
+    legend.position = c(.05, .95),
+    legend.justification = c("left", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(present_employment_general, present_employment_response, ncol=2)
+```
+
+In this category most applicants are those who are employed for more than $1$ year and less than for $4$. It is no surprise that 
+those who are unemployed the least often apply for a loan.
+
+### Guarantors
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+guarantors_general <- ggplot(credit_risk, aes(Other_debtors, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A101", "A102", "A103"),
+                   labels=c("none", 
+                            "co-applicant", 
+                            "guarantor")) + 
+  labs(x = 'Other debtors',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+guarantors_response <- ggplot(credit_risk, aes(Other_debtors, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A101", "A102", "A103"),
+                   labels=c("none", 
+                            "co-applicant", 
+                            "guarantor")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  
+  labs(x = 'Other debtors',
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(guarantors_general, guarantors_response, ncol=2)
+```
+
+Here we can see that significant majority of applicants are those who have no guarantors.
+
+### Property 
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+property_general <- ggplot(credit_risk, aes(Property, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A121", "A122", "A123", "A124"),
+                   labels=c("real estate", 
+                            "life insurance", 
+                            "car or ather", 
+                            "unknown")) +  
+  labs(x = 'Property',
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+property_response <- ggplot(credit_risk, aes(Property, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") +  
+  scale_x_discrete(limits=c("A121", "A122", "A123", "A124"),
+                   labels=c("real estate", 
+                            "life insurance", 
+                            "car or ather", 
+                            "unknown")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  
+  labs(x = 'Property',
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(property_general, property_response, ncol=2)
+```
+
+Based on the chart above, we see that the distribution of applicants by ownership is well balanced.
+
+### Other installment
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+other_installment_general <- ggplot(credit_risk, aes(Other_installment, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A141", "A142", "A143"),
+                   labels=c("bank", 
+                            "stores", 
+                            "none.")) +
+  labs(x = "Other installment",
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+other_installment_response <- ggplot(credit_risk, aes(Other_installment, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A141", "A142", "A143"),
+                   labels=c("bank", 
+                            "stores", 
+                            "none.")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = "Other installment",
+       y = "Count") +
+  theme(
+    legend.position = c(.05, .95),
+    legend.justification = c("left", "top"),
+    legend.box.just = "right",
+  )
+
+
+grid.arrange(other_installment_general, other_installment_response, ncol=2)
+```
+
+We also see that most applicants have no other installments.
+
+### Housing
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+housing_general <- ggplot(credit_risk, aes(Housing, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A151", "A152", "A153"),
+                   labels=c("rent", 
+                            "ownership", 
+                            "no cost")) + 
+  labs(x = "Housing",
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+housing_response <- ggplot(credit_risk, aes(Housing, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A151", "A152", "A153"),
+                   labels=c("rent", 
+                            "ownership", 
+                            "no cost")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = "Housing",
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(housing_general, housing_response, ncol=2)
+```
+
+From the above chart we see that most applicants are the owners of the house/flat.
+
+### Job
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+job_general <- ggplot(credit_risk, aes(Job, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A171", "A172", "A173", "A174"),
+                   labels=c("unemployed", 
+                            "unskilled", 
+                            "skilled employee", 
+                            "highly qualified employee")) + 
+  labs(x = "Qualifications",
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+job_response <- ggplot(credit_risk, aes(Job, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A171", "A172", "A173", "A174"),
+                   labels=c("unemployed", 
+                            "unskilled", 
+                            "skilled employee", 
+                            "highly qualified employee")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = "Qualifications",
+       y = "Count") +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(job_general, job_response, ncol=2)
+```
+
+Based on qualifications we can see that most applicants are skilled employees. 
+
+### Foreign worker
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+foreign_worker_general <- ggplot(credit_risk, aes(Foreign_worker, ..count..)) + 
+  geom_bar(position = "dodge", colour = 'black', fill = 'royalblue1') + 
+  scale_x_discrete(limits=c("A201", "A202"),
+                   labels=c("yes", 
+                            "no")) + 
+  labs(x = "Foreign worker",
+       y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+foreign_worker_response <- ggplot(credit_risk, aes(Foreign_worker, ..count..)) + 
+  geom_bar(aes(fill = Response), position = "dodge") + 
+  scale_x_discrete(limits=c("A201", "A202"),
+                   labels=c("yes", 
+                            "no")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x = "Foreign worker",
+       y = "Count") +
+  theme_bw() +
+  theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+  )
+
+grid.arrange(foreign_worker_general, foreign_worker_response, ncol=2)
+```
+
+## Graphs for quantitative variables
+In this part of analysis we will concentrate on quantitative variables. 
+
+### Age
+#### Boxplot
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+age_boxplot_general <- ggplot(credit_risk, aes(y=Age)) + 
+  geom_boxplot(color = 'black', fill = 'royalblue') + 
+  theme_bw()
+
+age_boxplot_response <- ggplot(credit_risk, aes(y=Age)) + 
+  geom_boxplot(aes(fill=Response)) + 
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) +
+  
+  theme_bw() +
+  theme(legend.title=element_blank()) 
+
+
+grid.arrange(age_boxplot_general, age_boxplot_response,
+             ncol=2, widths=c(0.82, 1))
+```
+
+From these box plots we can see that overall the median of customers age getting a loan is above the $30$ years. On the right hand side, so the boxplot considering the class membership, we can say that older people are more likely to get a positive feedback for getting a loan.
+
+#### Age - personal status
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+age_status <- ggplot(credit_risk, aes(Age, ..count..)) + 
+  geom_bar(aes(fill = Personal_status)) +
+  scale_fill_discrete(breaks=c("A91", "A92", "A93", "A94"),
+                      labels=c("male - divorced/separated", 
+                               "female - divorced/separated/married", 
+                               "male - single", "male - married/widowed")) +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())
+
+age_status
+```
+
+Above we see an age histogram with an additional breakdown by personal status.
+We see that most of the youngest applicants are divorced/separated/married women, while after about $25$ years of age, the majority are single men. We can also see that most applicants are under age of $40$.
+
+#### Density
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+age_density <- ggplot(credit_risk, aes(Age, ..density..)) + 
+  geom_density(aes(fill = Response), alpha = 0.3) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen3", "2" = "orangered")) +
+  theme_bw() +
+  theme(legend.position="bottom") + 
+  theme(legend.title=element_blank())
+
+age_density
+```
+
+The density plot of Age shows that the most customers have between $20$ and $30$ years. There is also a concrete age, after which the clients are classified as good in case of getting a loan. Below this age we can see that there is a bigger trend in not receiving a loan.
+
+### Amount of the credit
+#### Density
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_histogram <- ggplot(credit_risk, aes(Credit_amount, ..count..)) + 
+  geom_histogram(color = "black", fill = 'royalblue1', bins = 50) +
+  theme(legend.position="bottom") + 
+  theme_bw() +
+  theme(legend.title=element_blank())
+
+
+credit_amount_density <- ggplot(credit_risk, aes(Credit_amount, ..density..)) + 
+  geom_density(aes(fill = Response), alpha = 0.3) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen3", "2" = "orangered")) +
+  theme_bw() +
+  theme(legend.position="bottom") + 
+  theme(legend.title=element_blank())
+  
+
+grid.arrange(credit_amount_histogram, credit_amount_density, nrow=2)
+```
+
+From the plot above we can see that the most frequent amount of credit that customers get is lower than $5000\hspace{0.2em}DM$. To be precise the most frequent value is between $1000-2500\hspace{0.2em}DM$. The plot below shows that for lower amount of credit the possibility to get a positive response is higher.
+
+#### Boxplots
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_boxplot_general <- ggplot(credit_risk, aes(y=Credit_amount)) + 
+  geom_boxplot(color = 'black', fill = 'royalblue') + 
+  theme_bw()
+
+credit_amount_boxplot_response <- ggplot(credit_risk, aes(y=Credit_amount)) + 
+  geom_boxplot(aes(fill=Response)) + 
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) +
+  
+  theme_bw() +
+  theme(legend.title=element_blank()) 
+
+
+grid.arrange(credit_amount_boxplot_general, credit_amount_boxplot_response,
+             ncol=2, widths=c(0.82, 1))
+```
+
+Both box plots show that there are a lot of outliers in the data. We can also say that there are more bad responses for customers, who wants a bigger amount of credit.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_boxplot_purpose <- ggplot(credit_risk, aes(x = Purpose, y=Credit_amount)) + 
+  geom_boxplot(aes(fill=Response)) +
+  scale_x_discrete(limits = c("A40", "A41", "A42", "A43", "A44", "A45", 
+                              "A46", "A47", "A48", "A49", "A410"),
+                   labels=c("new car", "used car", "furniture", "television", 
+                            "household appliances", "repairs", "education", "vacation",
+                            "retraining", "business", "others")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title="Amount of the credit by Purpose", y = "Amount of the credit") +
+  theme(plot.title = element_text(hjust=0.5))
+  
+
+credit_amount_boxplot_purpose
+```
+
+For 'others' $\textit{Purpose}$ on the graph, we can say that there is a huge amount of credit that clients want to receive, but it does not refers to a good response of getting it. Also as we can see there are no observations for $\textit{vacation}$.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_boxplot_job <- ggplot(credit_risk, aes(x = Job, y=Credit_amount)) + 
+  geom_boxplot(aes(fill=Response)) +
+  scale_x_discrete(limits=c("A171", "A172", "A173", "A174"),
+                   labels=c("unemployed", 
+                            "unskilled", 
+                            "skilled employee", 
+                            "highly qualified employee")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title="Amount of the credit by Qualifications", x = 'Qualifications',
+       y = "Amount of the credit") +
+  theme(plot.title = element_text(hjust=0.5))
+
+
+credit_amount_boxplot_job
+```
+
+From the above box plots we can see that most qualification employees apply for biggest loans.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_boxplot_present_employment<- ggplot(credit_risk, aes(x = Present_employment, y=Credit_amount)) + 
+  geom_boxplot(aes(fill=Response)) + 
+  scale_x_discrete(limits=c("A71", "A72", "A73", "A74", "A75"),
+                   labels=c("unemployed", 
+                            "< 1 year", 
+                            TeX(r"(1 $\leq$ ... < 4 years)"),
+                            TeX(r"(4 $\leq$ ... < 7 years)"),
+                            TeX(r"($\geq$ 7 years)"))) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title="Amount of the credit by Present employment", x = 'Present employment',
+       y = "Amount of the credit") +
+  theme(plot.title = element_text(hjust=0.5))
+
+
+credit_amount_boxplot_present_employment
+```
+
+The charts containing box plots divided into employment and bonds show that there is no significant difference in the loan amount applied for by people belonging to particular categories.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+credit_amount_boxplot_bonds <- ggplot(credit_risk, aes(x = Bonds, y=Credit_amount)) + 
+  geom_boxplot(aes(fill=Response)) +
+  scale_x_discrete(limits=c("A61", "A62", "A63", "A64", "A65"),
+                   labels=c("< 100 DM", 
+                            TeX(r"(100 $\leq$ ... < 500 DM)"), 
+                            TeX(r"(500 $\leq$ ... < 1000 DM)"),
+                            TeX(r"($\geq$ 1000 DM)"),
+                            "No bonds")) +
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title="Amount of the credit by Bonds", x = 'Bonds',
+       y = "Amount of the credit") +
+  theme(plot.title = element_text(hjust=0.5))
+
+
+credit_amount_boxplot_bonds
+```
+
+
+
+### Duration
+#### Boxplot
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+duration_boxplot_general <- ggplot(credit_risk, aes(y=Duration_in_months)) + 
+  geom_boxplot(color = 'black', fill = 'royalblue') + 
+  theme_bw()
+
+duration_boxplot_response <- ggplot(credit_risk, aes(y=Duration_in_months)) + 
+  geom_boxplot(aes(fill=Response)) + 
+  scale_fill_manual(breaks = c("1", "2"),
+                    labels = c("Good", "Bad"),
+                    values = c("1" = "seagreen4", "2" = "orangered")) +
+  
+  theme_bw() +
+  theme(legend.title=element_blank()) 
+
+
+grid.arrange(duration_boxplot_general, duration_boxplot_response,
+             ncol=2, widths=c(0.82, 1))
+```
+
+The customers are more likely to get a positive response for getting a loan, when the $\textit{Duration_in_months}$ is lower.
+
+#### Histogram
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=9.5}
+duration_histogram <- ggplot(credit_risk, aes(Duration_in_months, ..count..)) + 
+  geom_histogram(color = "black", fill = 'royalblue1', bins = 25) +
+  theme_bw() +
+  theme(legend.position="bottom") + 
+  theme(legend.title=element_blank())
+  
+
+duration_density <- ggplot(credit_risk, aes(Duration_in_months, ..density..)) + 
+  geom_density(color = "black", fill = 'royalblue1') +
+  geom_vline(xintercept = c(12, 24, 36, 48, 60, 72),
+             linetype="dashed", color = "red", lwd = 0.7) +
+  theme_bw() +
+  theme(legend.position="bottom") + 
+  theme(legend.title=element_blank())
+
+
+grid.arrange(duration_histogram, duration_density, nrow=2)
+```
+
+From the histogram and density of credit duration we can see that most loans are taken for less than about two years. At the density plot there are also full years marked with red dashed lines, and we can see that thay cover with peaks of frequency of credit duration. In other words, durations of credits are usually multiples of a year.
+
+## Correlation analysis
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10}
+data_for_cor <- credit_risk[c(2, 5, 8, 11, 13, 16)]
+corr_matr <- cor(as.matrix(data_for_cor))
+
+correlation_plot <- ggcorrplot(corr_matr, 
+                               hc.order=TRUE, 
+                               lab=TRUE, 
+                               show.legend = FALSE) + 
+  ggtitle("Correlation between numeric variables") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+correlation_plot
+```
+
+The correlation matrix shows that the highest correlation can be observed between $\textit{Credit_amount}$ and $\textit{Duration_in_months}$ variables.
+
+# Classification
+For further analysis connected with classification we need to split our original dataset into two subsets: train and test. 
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(123)
+
+train_index <- createDataPartition(y=Response, times=1, p = 0.7, list = FALSE)
+train_set <- credit_risk[train_index,]
+test_set <- credit_risk[-train_index,]
+```
+We set the train set to be exactly $70\%$ of the whole data. The other part, so the $30\%$ will be our test set. Now we can begin the classification analysis.
+
+## Classification tree
+First we will consider the classification tree, in which we will operate on previously defined train and test sets. In the model we will use all explanatory features. To define the tree we need to use $\textit{rpart}$ function from the same named library. To plot our basic classification tree, which operates on the train set we need to use $\textit{rpart.plot}$. 
+
+After visualization we can move on to predictions, on the basis of which we will create a confusion matrix. Having this matrix we can calculate the accuracy of the model.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10, fig.height=6}
+set.seed(123)
+
+class_tree <- rpart(Response ~., data = train_set)
+rpart.plot(class_tree, main="Classification Tree")
+
+# Predict
+test_set_pred <- predict(class_tree, test_set, type = "class")
+```
+
+Confusion matrix
+```{r, warning=FALSE, echo=FALSE}
+confusion_matrix_test <- table(test_set_pred, test_set$Response)
+confusion_matrix_test
+```
+
+Accuracy
+```{r, warning=FALSE, echo=FALSE}
+accuracy_test_tree <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+accuracy_test_tree <- round(accuracy_test_tree, 4)
+accuracy_test_tree
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+suppressWarnings({
+conf_matrix_prec_rec <- confusionMatrix(data = test_set_pred, reference = test_set$Response)
+
+sens <- conf_matrix_prec_rec$byClass["Sensitivity"]
+spec <- conf_matrix_prec_rec$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens, spec))
+result_table
+})
+```
+
+At the top of the tree we can see the variable $\textit{Checking_account}$. The confusion matrix shows that the number of customers, who are classified correctly is equal to $217$ from all the $300$ observation of the test set. Hence the estimated accuracy is equal $0.7233$. What is more we have a relatively high Sensitivity, so the number of correctly identified true positive cases is close to $80.5\%$. When it comes to Specificity here the number of correctly identified true negative cases is about $53.3\%$. Overall we are expecting the best compromise between these two metrics and here it quite differs from each other, but we will compare it with different results in further analysis.
+
+## Tree with pruning
+Let us now introduce some changes to the original tree. Now we will try to find parameters that may improve our model. For this purpose we will use the $\textit{rpart.control}$ function. Inside we set the $\textit{minsplit}$ parameter, which stands for the minimum number of observations that must exist in a node, equal to $5$ and the $\textit{maxdepth}$, that sets the maximum depth of any node of the final tree, equal to $20$. We are also looking for the complexity parameter ($\textit{cp}$). 
+
+Received parameters can be used in pruning the tree. We need to find the tree yielding the lowest-cross-validated rate. Here we get $\textit{best_nsplit}$ equal to $4$ and optimal complexity parameter selected by us based on the results is $0.028571$. After that we use the function $\textit{prune}$ and we repeat the procedure as in the previous tree.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10, fig.height=7.5}
+set.seed(123)
+
+tree_complex <- rpart(Response ~., 
+                      data=train_set, 
+                      control=rpart.control(cp=.01, minsplit=5, maxdepth=20))
+
+# Choosing a complexity parameter
+printcp(tree_complex)
+
+bestcp <- tree_complex$cptable[which.min(tree_complex$cptable[,"xerror"]),"CP"]
+best_nsplit <- tree_complex$cptable[which.min(tree_complex$cptable[,"xerror"]),"nsplit"]
+
+best_nsplit
+bestcp
+
+#optimal complexity parameter
+cp_optimal <- bestcp
+
+#pruning
+tree_pruned <- prune(tree_complex, cp = cp_optimal, minsplit = best_nsplit)
+
+#plot both
+par(mfrow=c(2,1))
+rpart.plot(class_tree, main="Original tree")
+rpart.plot(tree_pruned, main="Pruned tree")
+par(mfrow=c(1,1))
+```
+
+Confusion matrix
+```{r, warning=FALSE, echo=TRUE}
+test_set_pred_complex <- predict(tree_pruned, test_set, type = "class")
+
+confusion_matrix_test_complex <- table(test_set_pred_complex, test_set$Response)
+print(confusion_matrix_test_complex)
+```
+
+Accuracy
+```{r, warning=FALSE, echo=TRUE}
+accuracy_test_pruned <- sum(diag(confusion_matrix_test_complex)) /
+                            sum(confusion_matrix_test_complex)
+accuracy_test_pruned <- round(accuracy_test_pruned, 4)
+accuracy_test_pruned
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_pruned <- confusionMatrix(data = test_set_pred_complex, reference = test_set$Response)
+
+sens_pr <- conf_matrix_pruned$byClass["Sensitivity"]
+spec_pr <- conf_matrix_pruned$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_pr, spec_pr))
+result_table
+```
+
+We can see that our accuracy after pruning is equal to $0.7433$. It gives us $223$ correctly classified clients. Also our pruned tree is now much shorter, and the accuracy is higher, so it improved the model pretty well. We can also see a growth in Sensitivity, resulting in the decrease of the Specificity.
+
+## Random forest
+Let us move on to other classification method, which is in our case $\textit{random forest}$. In the first case our model will take all the features. The function $\textit{randomForest}$ takes the default number of tree equal to $200$. Both $\textit{importance}$ and $\textit{proximity}$ are set as $\textit{TRUE}$.
+
+After that we can dive deeper into predictions. Similarly as in the first method (classification tree) we construct the confusion matrix and finally calculate the accuracy of the model.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE}
+set.seed(123)
+
+rf_all <- randomForest(Response~., 
+                     data = train_set, 
+                     ntree = 200,
+                     importance=TRUE, 
+                     proximity=TRUE)
+
+# Variable importance ranking
+varImpPlot(rf_all, main='Variable importance plot', cex=0.8)
+```
+
+Confusion matrix
+```{r,  warning=FALSE, echo=TRUE}
+test_set_rf_pred <- predict(rf_all, test_set, type="class")
+confusion_matrix_test_rf <- table(test_set_rf_pred, test_set$Response)
+confusion_matrix_test_rf
+```
+
+Accuracy
+```{r,  warning=FALSE, echo=TRUE}
+accuracy_rf <- sum(diag(confusion_matrix_test_rf)) / sum(confusion_matrix_test_rf)
+accuracy_rf <- round(accuracy_rf, 4)
+accuracy_rf
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_rf_sens <- confusionMatrix(data = test_set_rf_pred, reference = test_set$Response)
+
+sens_rf <- conf_matrix_rf_sens$byClass["Sensitivity"]
+spec_rf <- conf_matrix_rf_sens$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_rf, spec_rf))
+result_table
+```
+
+
+Our confusion matrix tells us that the number of correctly classified customers is equal to $229$. Hence we can see that estimated accuracy is equal $0.7633$. Sensitivity obtained for \textit{Random Forest} is greater than in case of classification tree. Here we crossed the barrier of $90\%$. The variable importance plot shows that the most important feature in case of $\textit{MeanDecreaseGini}$ is the $\textit{Credit_amount}$. The least important feature is $\textit{Foreign_worker}$. By looking at $\textit{MeanDecreaseAccuraccy}$ we can observe that the most important variable is $\textit{Checking_account}$ for maintaining the accuracy of the model and the least important is $\textit{Personal_status}$. 
+
+
+## Encoding ordinal and nominal features
+In the further part, we will consider LDA, QDA, logistic regression and k-NN classification models. 
+In order to use them we need to have our data in numerical form. Therefore we will perform ordinal encoding for ordinal variables and one hot encoding on nominal features. 
+
+```{r, warning=FALSE, echo=TRUE}
+set.seed(123)
+
+response_column <- credit_risk$Response
+credit_risk_class <- credit_risk[, 1:20]
+
+# nominal and ordinal features
+nominal_features <- c(3, 4, 9, 10, 12, 14, 15, 19, 20)
+ordinal_features <- c(1, 6, 7, 17)
+
+# ordinal encoding
+credit_risk_class[ordinal_features] <- lapply(credit_risk_class[ordinal_features], 
+                                         function(x) as.numeric(factor(x)))
+
+# one hot encoding - nominal features
+credit_risk_encoded <- data.frame(predict(dummyVars(" ~ .", data = credit_risk_class),
+                               newdata = credit_risk_class))
+
+credit_risk_encoded <- cbind(credit_risk_encoded, Response = response_column)
+```
+
+```{r, echo=FALSE}
+indexes = createDataPartition(y=Response, p = 0.7, list = FALSE)
+train_set_numeric = credit_risk_encoded[indexes,] 
+test_set_numeric = credit_risk_encoded[-indexes,] 
+```
+
+## Function calculating accuracy
+Here we define the function, which will help us in calculating the accuracy for $\textit{k-NN}$ method and $\textit{Logistic regression}$.
+
+```{r, fig.align="center", warning=FALSE, echo=TRUE, fig.width=10}
+calculate_accuracy = function(actual, predicted) {
+  mean(actual == predicted)
+}
+```
+
+## Discriminant analysis
+In this part we will focus our attention on discriminant analysis. We will concentrate on Linear Discriminant Analysis (LDA) and Quadratic Discriminant Analysis (QDA).
+
+### LDA
+Let us start from LDA. In the first approach we are going to consider all the variables. For this purpose we define the function $\textit{lda}$ in which we take all the features and our previously defined numeric train set. Then we perform the prediction and construct the confusion matrix. After all we calculate the accuracy of the model.
+
+```{r, fig.align="center", warning=FALSE, echo=TRUE, fig.width=10}
+set.seed(123)
+
+lda_fitting_all <- lda(Response~.,
+                       data=train_set_numeric)
+
+predict_lda_all <- predict(lda_fitting_all, test_set_numeric)
+class_lda_all <- predict_lda_all$class
+```
+
+Confusion matrix
+```{r, echo=FALSE}
+(conf_matrix_lda_all <- table(class_lda_all, test_set_numeric$Response))
+```
+
+Accuracy
+```{r, echo=FALSE}
+accuracy_lda_all <- sum(diag(conf_matrix_lda_all)) / sum(conf_matrix_lda_all)
+accuracy_lda_all <- round(accuracy_lda_all, 4)
+accuracy_lda_all
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lda_all_sens <- confusionMatrix(data = class_lda_all, reference = test_set_numeric$Response)
+
+sens_lda_all <- conf_matrix_lda_all_sens$byClass["Sensitivity"]
+spec_lda_all <- conf_matrix_lda_all_sens$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lda_all, spec_lda_all))
+result_table
+```
+
+Above we can see that estimated accuracy is equal $0.7567$. Hence the number of correctly classified customers is equal to $227$. We also obtained Sensitivity close to $84\%$. When it comes to Specificity here the number of correctly identified true negative cases is about $53.3\%$, so it is the same value as in the classification tree before pruning.
+
+#### Selecting three variables
+Second approach for the LDA analysis is by taking the three continuous features from the dataset. The rest of the procedure is exactly the same as in the previous model with all the features. 
+
+```{r, echo=FALSE}
+# construction of the classification rule based on 3 continuous variables
+set.seed(123)
+
+lda_fitting_3_vars <- lda(Response~Credit_amount + Age + Duration_in_months, 
+                          data=train_set_numeric)
+
+#predict
+predict_lda_3_vars <- predict(lda_fitting_3_vars, test_set_numeric)
+class_lda_3_vars <- predict_lda_3_vars$class
+
+(conf_matrix_lda_3_vars <- table(class_lda_3_vars, test_set_numeric$Response))
+
+#accuracy
+accuracy_lda_3_vars <- sum(diag(conf_matrix_lda_3_vars)) / sum(conf_matrix_lda_3_vars)
+accuracy_lda_3_vars <- round(accuracy_lda_3_vars, 4)
+accuracy_lda_3_vars
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lda_3_sens <- confusionMatrix(data = class_lda_3_vars, reference = test_set_numeric$Response)
+
+sens_lda_3 <- conf_matrix_lda_3_sens$byClass["Sensitivity"]
+spec_lda_3 <- conf_matrix_lda_3_sens$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lda_3, spec_lda_3))
+result_table
+```
+
+As we can see in this case we obtained the estimated accuracy = $0.7$, which gives us $210$ correctly classified customers. Taking these variables increased the Sensitivity up to $93.8\%$, resulting in the decrease in Specificity, which is in this approach slightly above $14\%$.
+
+
+#### Different subset
+In third approach we are going to consider different subset of features. Here we concentrate on improving the final accuracy result. For this purpose we take specially selected variables in the following way in $\textit{lda_fitting_sample}$. Every next step is similar to previous analysis. 
+
+```{r, echo=FALSE}
+# construction of the classification for selected numeric and ordinal variables
+set.seed(123)
+
+lda_fitting_sample <- lda(Response~Credit_amount + Checking_account + Duration_in_months + Age + Bonds +
+                          Present_employment + Installment_rate + Existing_credits + 
+                          Present_residence + Number_of_people,
+                          data=train_set_numeric)
+```
+
+Confusion matrix
+```{r, echo=TRUE}
+predict_lda_sample <- predict(lda_fitting_sample, test_set_numeric)
+class_lda_sample <- predict_lda_sample$class
+
+(conf_matrix_lda_sample <- table(class_lda_sample, test_set_numeric$Response))
+```
+
+Accuracy
+```{r, echo=TRUE}
+accuracy_lda_sample <- sum(diag(conf_matrix_lda_sample)) / sum(conf_matrix_lda_sample)
+accuracy_lda_sample <- round(accuracy_lda_sample, 4)
+accuracy_lda_sample
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lda_sample <- confusionMatrix(data = class_lda_sample, reference = test_set_numeric$Response)
+
+sens_lda_sample <- conf_matrix_lda_sample$byClass["Sensitivity"]
+spec_lda_sample <- conf_matrix_lda_sample$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lda_sample, spec_lda_sample))
+result_table
+```
+
+In the last approach the estimated accuracy is equal $0.7467$. The number of correctly classified clients is equal to $224$. In the last case we obtained an increase in Specificity over the previous approach with $3$ attributes. 
+
+### QDA
+Let us move to Quadratic Discriminant Analysis. We will start from performing the method for all features. After that we will modify the model and see if the accuracy has changed. We consider numeric train and test set.
+
+```{r, warning=FALSE, echo=FALSE}
+# construction of the classification rule for all variables (not exactly all because of rank problem)
+set.seed(123)
+
+qda_fit_all <- qda(Response~Checking_account+Duration_in_months+Credit_historyA32+Credit_historyA34+PurposeA40+PurposeA41+Credit_amount+Bonds+Present_employment+Installment_rate+Personal_statusA93+Other_debtorsA101+Present_residence+PropertyA121+PropertyA122+PropertyA123+Age+Other_installmentA141+Other_installmentA143+HousingA151+HousingA152+Existing_credits+Job+Number_of_people+Foreign_workerA201,
+                   data=train_set_numeric)
+```
+
+Confusion matrix
+```{r, warning=FALSE, echo=TRUE}
+predict_qda_all <- predict(qda_fit_all, test_set_numeric)
+class_qda_all <- predict_qda_all$class
+
+(conf_matrix_qda_all <- table(class_qda_all, test_set_numeric$Response))
+```
+
+Accuracy
+```{r, warning=FALSE, echo=TRUE}
+accuracy_qda_all <- sum(diag(conf_matrix_qda_all)) / sum(conf_matrix_qda_all)
+accuracy_qda_all <- round(accuracy_qda_all, 4)
+accuracy_qda_all
+```
+Above we can see that estimated accuracy is equal $0.71$. The number of correctly classified customers is equal to $213$.
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_qda_all <- confusionMatrix(data = class_qda_all, reference = test_set_numeric$Response)
+
+sens_qda_all <- conf_matrix_qda_all$byClass["Sensitivity"]
+spec_qda_all <- conf_matrix_qda_all$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_qda_all, spec_qda_all))
+result_table
+```
+Here we also obtained the highest value of Specificity compared to previous classification methods. Moreover the values of both metrics are closest to each other.
+
+#### Selecting three variables
+In the second approach for the QDA analysis we will select three continuous features from the data. The rest of the procedure is exactly the same as in the previous model with all the features. Hence we can move on to the results.
+
+```{r, echo=FALSE}
+# construction of the classification rule based on 3 continuous variables
+set.seed(123)
+
+
+qda_fit_3_vars <- qda(Response~Credit_amount + Age + Duration_in_months, 
+                      data=train_set_numeric)
+```
+
+Confusion matrix
+```{r, echo=TRUE}
+predict_qda_3_vars <- predict(qda_fit_3_vars, test_set_numeric)
+class_qda_3_vars <- predict_qda_3_vars$class
+
+(conf_matrix_qda_3_vars <- table(class_qda_3_vars, test_set_numeric$Response))
+```
+
+Accuracy
+```{r, echo=TRUE}    
+accuracy_qda_3_vars <- sum(diag(conf_matrix_qda_3_vars)) / sum(conf_matrix_qda_3_vars)
+accuracy_qda_3_vars <- round(accuracy_qda_3_vars, 4)
+accuracy_qda_3_vars
+```
+We can see a decrease in the estimated accuracy, which now is equal to $0.6767$ and the number of correctly classified customers is $203$.
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_qda_3 <- confusionMatrix(data = class_qda_3_vars, reference = test_set_numeric$Response)
+
+sens_qda_3 <- conf_matrix_qda_3$byClass["Sensitivity"]
+spec_qda_3 <- conf_matrix_qda_3$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_qda_3, spec_qda_3))
+result_table
+```
+After selecting only $3$ attributes from the dataset we obtained a decrease in Specificity and obtained a small increase of Sensitivity.
+
+#### Different subset
+In third approach we are going to consider different subset of features. Here we concentrate on improving the final accuracy result for QDA analysis. For this purpose we take specially selected variables in the following way in $\textit{qda_fit_sample}$. Every next step is similar to previous analysis. 
+
+```{r, echo=FALSE}
+# construction of the classification for selected variables
+set.seed(123)
+ 
+qda_fit_sample <- qda(Response~Credit_amount + Checking_account + Duration_in_months + Age + Bonds +
+                      Present_employment + Installment_rate + Existing_credits + 
+                      Present_residence + Number_of_people,
+                      data=train_set_numeric)
+```
+ 
+Confusion matrix
+```{r, echo=TRUE}
+predict_qda_sample <- predict(qda_fit_sample, test_set_numeric)
+class_qda_sample<- predict_qda_sample$class
+ 
+(conf_matrix_qda_sample <- table(class_qda_sample, test_set_numeric$Response))
+```
+
+Accuracy
+```{r, echo=TRUE}
+accuracy_qda_sample <- sum(diag(conf_matrix_qda_sample)) / sum(conf_matrix_qda_sample)
+accuracy_qda_sample <- round(accuracy_qda_sample, 4)
+accuracy_qda_sample
+```
+Above we can see that estimated accuracy is equal to $0.7267$. The number of correctly classified customers is equal to $218$.
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_qda_sample <- confusionMatrix(data = class_qda_sample, reference = test_set_numeric$Response)
+
+sens_qda_sample <- conf_matrix_qda_sample$byClass["Sensitivity"]
+spec_qda_sample <- conf_matrix_qda_sample$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_qda_sample, spec_qda_sample))
+result_table
+```
+The level of Sensitivity remained the same after selecting the last subset. In the other hand the growth of Specificity can be seen.
+
+## Logistic regression
+
+Now we will check performance of classification using logistic regression for our data set. Starting with 
+considering all features as predictors we can constructed using train method from 'caret' package. By seting arguments: 
+
+- method = 'glm', 
+- family = 'binomial', 
+
+we specify that we want to use logistic regresion in model construction and by seting argument preProcess = ("center", "scale"), we obtain data standarization.
+
+```{r, warning=FALSE, echo=TRUE, message=FALSE}
+library(fclust)
+logistic_regression_model = train(
+  form = Response ~ .,
+  data = train_set_numeric,
+  method = "glm",
+  preProcess = c("center", "scale"),
+  family = "binomial"
+)  
+```
+
+Accuracy
+```{r, warning=FALSE, echo=TRUE}
+pred_lr_all <- predict(logistic_regression_model, test_set_numeric)
+
+accuracy_lr_all <- calculate_accuracy(actual = test_set_numeric$Response,
+                                      predicted = pred_lr_all)
+accuracy_lr_all <- round(accuracy_lr_all, 4)
+accuracy_lr_all
+```
+
+As we can see accuracy achieved by testing model on test data set is approximately equal to $0.75$. 
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lr_all <- confusionMatrix(data = pred_lr_all, reference = test_set_numeric$Response)
+
+sens_lr_all <- conf_matrix_lr_all$byClass["Sensitivity"]
+spec_lr_all <- conf_matrix_lr_all$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lr_all, spec_lr_all))
+result_table
+```
+
+Now we will check the performance of similar constructed model, but this time we will use features as predictors that were original numeric, which are:
+
+- $\textit{Duration_in_months}$,
+- $\textit{Credit_amount}$,
+- $\textit{Age}$. 
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10}
+logistic_regression_model_subset_1 = train(
+  form = Response ~ Duration_in_months + Credit_amount + Age,
+  data = train_set_numeric,
+  preProcess = c("center", "scale"),
+  method = "glm",
+  family = "binomial"
+)
+```
+
+Accuracy
+```{r, echo=FALSE}
+pred_lr_cont_vars <- predict(logistic_regression_model_subset_1, test_set_numeric)
+
+accuracy_lr_cont_vars <- calculate_accuracy(actual = test_set_numeric$Response,
+                   predicted = pred_lr_cont_vars)
+
+accuracy_lr_cont_vars <- round(accuracy_lr_cont_vars, 4)
+accuracy_lr_cont_vars
+```
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lr_cont <- confusionMatrix(data = pred_lr_cont_vars, reference = test_set_numeric$Response)
+
+sens_lr_cont <- conf_matrix_lr_cont$byClass["Sensitivity"]
+spec_lr_cont <- conf_matrix_lr_cont$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lr_cont, spec_lr_cont))
+result_table
+```
+For Logistic Regression we can see the same tendency in both metrics. So less features selected give us the decrease in Specificity. In this case we also need to point out the fact of obtaining the highest level of Sensitivity which is in this case above $94\%$.
+
+This subset of features results in worse result in case of accuracy than model with set of all features. So now we will try to select such subset that gives better result than model considering all variables, and for instance by taking into account following features: 
+
+- $\textit{Checking_account}$, 
+- $\textit{Duration_in_months}$, 
+- $\textit{Age}$,
+- $\textit{Bonds}$,
+- $\textit{Present_employment}$,
+- $\textit{Other_debtors}$,
+- $\textit{Present_residence}$,
+- $\textit{Installment_rate}$,
+- $\textit{Existing_credits}$,
+- $\textit{Number_of_people}$.
+
+```{r, warning=FALSE, echo=FALSE}
+logistic_regression_model_subset_2 = train(
+  form = Response ~ Credit_amount + Checking_account + Duration_in_months + Age + Bonds +
+                      Present_employment + Installment_rate + Existing_credits + 
+                      Present_residence + Number_of_people,
+  data = train_set_numeric,
+  preProcess = c("center", "scale"),
+  method = "glm",
+  family = "binomial"
+)
+```
+
+Accuracy
+```{r, echo=FALSE}
+pred_lr_subset <- predict(logistic_regression_model_subset_2, test_set_numeric)
+
+accuracy_lr_subset <- calculate_accuracy(actual = test_set_numeric$Response,
+                   predicted = pred_lr_subset)
+
+accuracy_lr_subset <- round(accuracy_lr_subset, 4)
+accuracy_lr_subset
+```
+This time accuracy is approximately equal to $0.7667$ which is slightly better result than for logistic regression model considering all variables.
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_lr_subset <- confusionMatrix(data = pred_lr_subset, reference = test_set_numeric$Response)
+
+sens_lr_subset <- conf_matrix_lr_subset$byClass["Sensitivity"]
+spec_lr_subset <- conf_matrix_lr_subset$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_lr_subset, spec_lr_subset))
+result_table
+```
+Here we can say that the Sensitivity is twice the size of Specificity.
+
+## k-NN method
+
+Now we will consider k-NN classification model. Starting with treating all features as predictors our basic model can be created 
+using same method as logistic model but this time me set:
+
+- method = 'knn'
+
+In this case main difference from the logistic regression model is that we have parameter that can be tuned. This parameter is $k$ 
+and stands for the number of nearest neighbors. In order to tune parameter we can set argument:
+ 
+- tuneGrid = expand.grid(k = seq(1, 50, by = 1)), 
+
+this way we specify range in which model will look for the best value of parameter. 
+
+```{r, fig.align="center", warning=FALSE, fig.width=10, echo=TRUE}
+set.seed(123)
+
+knn_model = train(
+  form = Response ~ .,
+  data = train_set_numeric,
+  trControl = trainControl(method = "cv", number = 10),
+  method = "knn",
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(k = seq(1, 50, by = 1))
+)
+
+ggplot(knn_model) + theme_bw()
+```
+
+Accuracy
+```{r, warning=FALSE, echo=TRUE}
+pred_knn_all <- predict(knn_model, test_set_numeric)
+
+accuracy_knn_all <- calculate_accuracy(actual = test_set_numeric$Response,
+                                       predicted = pred_knn_all)
+
+accuracy_knn_all <- round(accuracy_knn_all, 4)
+accuracy_knn_all
+```
+We can see that basic model performs the best for $k$ equal to $11$ and after testing this model on test data set rests in accuracy equal to $0.71$. 
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_knn_all <- confusionMatrix(data = pred_knn_all, reference = test_set_numeric$Response)
+
+sens_knn_all <- conf_matrix_knn_all$byClass["Sensitivity"]
+spec_knn_all <- conf_matrix_knn_all$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_knn_all, spec_knn_all))
+result_table
+```
+
+Now we will check performance of k-NN for subset of three originally numerical features.
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10}
+knn_model_subset_1 = train(
+  form = Response ~ Duration_in_months + Credit_amount + Age,
+  data = train_set_numeric,
+  trControl = trainControl(method = "cv", number = 10),
+  method = "knn",
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(k = seq(1, 50, by = 1))
+)
+
+ggplot(knn_model_subset_1) + theme_bw()
+
+#knn_model_subset_1$bestTune
+```
+
+Accuracy
+```{r, echo=FALSE}
+pred_knn_con_vars <- predict(knn_model_subset_1, test_set_numeric)
+
+accuracy_knn_cont_vars <- calculate_accuracy(actual = test_set_numeric$Response,
+                   predicted = pred_knn_con_vars)
+
+accuracy_knn_cont_vars <- round(accuracy_knn_cont_vars, 4)
+accuracy_knn_cont_vars
+```
+In this case accuracy drops to approximately $0.7033$ for best value of $k$ parameter which this time is equal to $17$. 
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_knn_cont <- confusionMatrix(data = pred_knn_con_vars, reference = test_set_numeric$Response)
+
+sens_knn_cont <- conf_matrix_knn_cont$byClass["Sensitivity"]
+spec_knn_cont <- conf_matrix_knn_cont$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_knn_cont, spec_knn_cont))
+result_table
+```
+
+
+Now we will again try to find such subset of features that improves a model accuracy. By considering variables:
+
+- Checking_account,
+- Duration_in_months, 
+- Credit_amount,
+- Bonds,
+- Age,
+- Present_employment, 
+- Installment_rate,  
+- Present_residence,
+- Existing_credits,
+- Number_of_people,
+
+We achive the following result:
+
+```{r, fig.align="center", warning=FALSE, echo=FALSE, fig.width=10}
+set.seed(123)
+
+knn_model_subset_2 = train(
+  form = Response ~ Credit_amount + Checking_account + Duration_in_months + Age + Bonds +
+                      Present_employment + Installment_rate + Existing_credits + 
+                      Present_residence + Number_of_people,
+  
+  data = train_set_numeric,
+  trControl = trainControl(method = "cv", number = 10),
+  method = "knn",
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(k = seq(1, 50, by = 1))
+)
+
+ggplot(knn_model_subset_2) + theme_bw()
+
+#knn_model_subset_2$bestTune
+```
+
+Accuracy
+```{r, warning=FALSE, echo=TRUE}
+pred_knn_subset <- predict(knn_model_subset_2, test_set_numeric)
+
+accuracy_knn_subset <- calculate_accuracy(actual = test_set_numeric$Response,
+                   predicted = pred_knn_subset)
+
+accuracy_knn_subset <- round(accuracy_knn_subset, 4)
+accuracy_knn_subset
+```
+This time accuracy slightly increased to approximately $0.7433$ for best $k$ parameter equal to $18$.
+
+Sensitivity and Specificity
+```{r, warning=FALSE, echo=FALSE}
+conf_matrix_knn_subset <- confusionMatrix(data = pred_knn_subset, reference = test_set_numeric$Response)
+
+sens_knn_subset <- conf_matrix_knn_subset$byClass["Sensitivity"]
+spec_knn_subset <- conf_matrix_knn_subset$byClass["Specificity"]
+
+result_table <- data.frame(Value = c(sens_knn_subset, spec_knn_subset))
+result_table
+```
+For k-NN method we see similar results for three approaches considering Sensitivity and slight differences in Specificity. Sensitivity remains at a similar level all the time.
+
+
+## Accuracy assessment for all features - comparison of classification methods
+
+```{r, echo=FALSE}
+accuracy_values <- c(
+  accuracy_test_tree, accuracy_rf,
+  accuracy_lda_all, accuracy_qda_all, accuracy_lr_all, accuracy_knn_all
+)
+
+# Create a data frame with row names and accuracy values
+accuracy_df <- data.frame(Method = c("Classification tree", "Random \
+                                     forest", "LDA", "QDA",
+                                     "Logistic regression", "k-NN"),
+                                    Accuracy = accuracy_values)
+
+knitr::kable(accuracy_df,
+            format = 'html',
+            col.names = c("Method", "Accuracy"),
+            caption = 'Accuracy assessment for all variables') %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, width = "10em") %>%
+  column_spec(2, width = "7em") 
+
+```
+We can see that for all variables the best accuracy is obtained by using the $\textit{Random forest}$ classification method. 
+
+
+## Accuracy assessment for selected subset
+In this part we will compare 4 methods of classification: LDA, QDA, Logistic regression and k-NN. Here we provide accuracy for each of the method with the same subset selection.
+
+```{r, echo=FALSE}
+accuracy_values <- c(
+  accuracy_lda_3_vars, accuracy_qda_3_vars, 
+  accuracy_lr_cont_vars, accuracy_knn_cont_vars
+)
+
+accuracy_df <- data.frame(Method = c("LDA", "QDA",
+                                     "Logistic regression", "k-NN"),
+                                    Accuracy = accuracy_values)
+
+knitr::kable(accuracy_df,
+            format = 'html',
+            col.names = c("Method", "Accuracy"),
+            caption = 'Accuracy assessment for selected variables') %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, width = "12.5em") %>%
+  column_spec(2, width = "7em") 
+
+```
+For selection of 3 variables the best accuracy is obtained for $\textit{k-NN}$ method.
+
+## Accuracy assessment for different subset selection - improved final results
+
+```{r, echo=FALSE}
+accuracy_values <- c(
+ accuracy_lda_sample, accuracy_qda_sample, 
+ accuracy_lr_subset, accuracy_knn_subset
+)
+
+accuracy_df <- data.frame(Method = c("LDA", "QDA",
+                                    "Logistic regression", "k-NN"),
+                                   Accuracy = accuracy_values)
+
+knitr::kable(accuracy_df,
+           format = 'html',
+           col.names = c("Method", "Accuracy"),
+           caption = 'Accuracy assessment for different features') %>%
+ kable_styling(full_width = FALSE) %>%
+ column_spec(1, width = "12.5em") %>%
+ column_spec(2, width = "7em") 
+```
+
+After choosing the best parameters to improve each model, we obtained the biggest accuracy for $\textit{Logisitic regression}$.
+
+
+# Clustering
+In this section we will focus on clustering
+
+## Partitioning clustering
+
+
+### K-means
+For K-means clustering we select only numerical features from our dataset. We will compare results obtained both with and without standarization and find out during the validation if it improved our results or the opposite.
+
+```{r, echo=FALSE, fig.align="center", warning=FALSE, fig.width=10.5}
+set.seed(123)
+
+credit_risk_clust <- credit_risk_encoded[, -48]
+real_class_labels <- credit_risk_encoded$Response
+
+credit_numeric_features <- credit_risk_clust[c(2, 5, 8, 11, 13, 16, 18)]
+credit_standarized <- as.data.frame(scale(credit_numeric_features))
+
+# without standarization
+kmeans_credit_k_2_without_stand <- kmeans(credit_numeric_features, 
+                                          centers = 2)
+kmeans_labels_without_stand <- kmeans_credit_k_2_without_stand$cluster
+
+# with standarization
+kmeans_credit_k_2 <- kmeans(credit_standarized, centers=2)
+kmeans_labels <- kmeans_credit_k_2$cluster
+
+cluster_vis_no_stand <- fviz_cluster(kmeans_credit_k_2_without_stand, 
+                                     credit_numeric_features, 
+                                     main = "K-means without standardization", stand=FALSE)
+
+cluster_vis_stand <- fviz_cluster(kmeans_credit_k_2, credit_standarized, 
+                                  main = "K-means with standardization", stand=FALSE)
+grid.arrange(cluster_vis_no_stand, cluster_vis_stand, ncol = 2)
+```
+
+
+### Validation
+Now we will concentrate on k-means clustering validation. For this purpose we will perform the analysis of internal and external indices.
+
+#### Internal indices
+Let us begin with the internal indices. Below we present the plot of optimal number of clusters to see for which data (standarized or not standarized) we will obtain more satisfying results for average silhouette width.
+
+```{r, echo = FALSE, fig.align="center", warning=FALSE, fig.width=9.5}
+# Validation: k-means
+## internal indices
+### silhouette
+#### without standarization
+sil_vis_nb <- fviz_nbclust(credit_numeric_features, kmeans, 
+                           method = "silhouette") +
+  ggtitle("Optimal number of clusters (without standarization)")
+
+# with standarization
+sil_2_vis_nb <- fviz_nbclust(credit_standarized, kmeans, 
+                             method = "silhouette") +
+  ggtitle("Optimal number of clusters (with standarization)")
+grid.arrange(sil_vis_nb, sil_2_vis_nb, ncol = 2)
+```
+The plot of average silhouette width depending on the number of clusters shows that the optional number of clusters for data without standarization is $2$ and for data with standarization the best values of silhouette would be obtained after taking $7$ clusters. The value of average silhouette width is greater for the data without standarization.
+
+
+Let us see how the silhouette plot will look like. For this purpose we will change the number of selected centers for standarized data to $7$, according to the results obtained on the plot of optimal number of clusters. 
+```{r, echo = FALSE, fig.align="center", warning=FALSE, fig.width=7}
+#### silhouette plot
+library(cluster)
+kmeans_credit_k_7 <- kmeans(credit_standarized, centers=7)
+kmeans_labels_k_7 <- kmeans_credit_k_7$cluster
+
+silhouette_index <- silhouette(kmeans_labels_without_stand, 
+                               dist(credit_numeric_features))
+silhouette_index_with_stand <- silhouette(kmeans_labels_k_7, 
+                               dist(credit_standarized))
+
+plot(silhouette_index, 
+     border = NA, 
+     main = "Silhouette plot")
+
+plot(silhouette_index_with_stand, 
+     border = NA, 
+     main = "Silhouette plot with data standarization")
+```
+We can see that there is a big difference in the silhouette index for data without standarization (performing better) than for the data without it.
+
+Optimal number of cluster can be also found using wss and gap stat plots. 
+```{r, echo = FALSE, fig.align="center", warning=FALSE, fig.width=10.5}
+# elbow method
+first_vis <- fviz_nbclust(credit_numeric_features, kmeans, method = "wss") +
+  ggtitle("WSS Plot for data without standarization")
+sec_vis <- fviz_nbclust(credit_standarized, kmeans, method = "wss") +
+  ggtitle("WSS Plot for data with standarization")
+grid.arrange(first_vis, sec_vis, ncol = 2)
+
+# gap statistic
+gap_vis <- fviz_nbclust(credit_numeric_features, kmeans, method = "gap_stat") +
+  ggtitle("Gap Statistic Plot for data without standarization")
+gap_2 <- fviz_nbclust(credit_standarized, kmeans, method = "gap_stat") +
+  ggtitle("Gap Statistic Plot for data with standarization")
+grid.arrange(gap_vis, gap_2, ncol = 2)
+```
+
+
+Finally let us see if the number of centers selected for the data without standarization was correct by checking more internal indices. In this case we will use \textit{clValid} library to get the Dunn index and Connectivity.
+```{r, echo=FALSE, warning = FALSE, fig.align="center"}
+# K-means validation using clValid - internal indices
+
+rownames(credit_numeric_features) <- 1:nrow(credit_numeric_features)
+
+internal_validation <- clValid(
+  credit_numeric_features,
+  nClust=2:6,
+  clMethods = c("kmeans"),
+  validation = "internal",
+  maxitems = 1000)
+
+#summary(internal_validation)
+
+plot(internal_validation)
+```
+From the results we can see that value of Dunn index is the greatest for the number of centers equal $2$. Connectivity suggest different number of centers, but the silhouette index returned the same number of centers as the dunn index. Hence we can say that after comparing the internal indices the optimal number of centers for analyzed dataset is two.
+
+#### External indices
+
+Jaccard, rand and adjusted rand indices
+```{r, echo=FALSE, warning=FALSE}
+library(ClusterR)
+
+real_class_numeric <- as.numeric(as.character(real_class_labels))
+
+jaccard_kmeans <- external_validation(real_class_numeric, 
+                                      kmeans_labels_without_stand, "jaccard_index")
+rand_kmeans <- external_validation(real_class_numeric, 
+                                   kmeans_labels_without_stand, "rand_index")
+adj_rand <- external_validation(real_class_numeric, 
+                                kmeans_labels_without_stand, "adjusted_rand_index")
+jaccard_stand <- external_validation(real_class_numeric, 
+                                     kmeans_labels, "jaccard_index")
+rand_stand <- external_validation(real_class_numeric, 
+                                  kmeans_labels, "rand_index")
+adj_rand_stand <- external_validation(real_class_numeric, 
+                                  kmeans_labels, "adjusted_rand_index")
+
+results <- data.frame(
+  Jaccard_Index = c(jaccard_kmeans, jaccard_stand),
+  Rand_Index = c(rand_kmeans, rand_stand),
+  Adjusted_Rand_Index = c(adj_rand, adj_rand_stand)
+)
+
+rownames(results) <- c("K-means without standarization", "Standarized K-means")
+results
+```
+The results considering external indices for data with standarization are slightly better, especially in \textit{Jaccard index}. If it comes to \textit{Rand index} the results are quite similar and the \textit{Adjusted Rand Index} is greater for standarized data. All indices are compared for K-means algorithm with $2$ centers.
+
+## Hierarchical clustering
+
+To perform hierarchical clustering we need to create a dissimilarity matrix. For this purpose we will use \textit{daisy} function. What we pass inside this function is a data frame containing the nominal variables of class \textit{factor}, ordinal variables of class \textit{ordered} and remaining numeric features.
+```{r, echo=FALSE, warning=FALSE}
+#class = factor
+credit_risk[nominal_features] <- lapply(credit_risk[nominal_features], 
+                                        function(x) as.factor((x)))
+#class = ordered
+credit_risk[ordinal_features] <- lapply(credit_risk[ordinal_features], function(x) {
+  factor(x, ordered = TRUE)
+})
+
+credit_risk_clust <- credit_risk[, -21]
+
+# dissimilarity matrix
+dissimilarities <- daisy(x = credit_risk_clust, metric = "gower")
+dis_matrix <- as.matrix(dissimilarities)
+```
+
+### AGNES
+Let us move to the first analyzed agglomerative method, which would be AGNES. We will consider three types of linkage method: average linkage, single linkage and complete linkage.
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=9.5, fig.width=11.5}
+# linkage methods
+credit_risk_avg      <- agnes(x=dis_matrix, diss=TRUE, stand=FALSE, method="average")
+credit_risk_single   <- agnes(x=dis_matrix, diss=TRUE, stand=FALSE, method="single")
+credit_risk_complete <- agnes(x=dis_matrix, diss=TRUE, stand=FALSE, method="complete")
+
+### cutting of the dendrogram
+credit_risk_avg_2_clusters <- cutree(credit_risk_avg, k=2)
+credit_risk_sing_2_clusters <- cutree(credit_risk_single, k=2)
+credit_risk_compl_2_clusters <- cutree(credit_risk_complete, k=2)
+
+# dendrogram
+par(cex = 0.2)
+par(lwd = 2)    
+plot(credit_risk_avg, which.plots=2, main="AGNES: average linkage", sub = NULL)
+```
+
+### Validation
+
+In this section we will we will verify the correctness of AGNES performance on analyzed credit risk dataset.
+
+#### Silhouette plot
+First we will check the Silhouette plot after cutting the dendrogram to $2$ clusters for three linkage methods.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+sil_agnes_2_clusters <- silhouette(x=credit_risk_avg_2_clusters, 
+                                   dmatrix=dis_matrix)
+sil_agnes_complete_2_clusters <- silhouette(x=credit_risk_compl_2_clusters, 
+                                   dmatrix=dis_matrix)
+sil_agnes_single_2_clusters <- silhouette(x=credit_risk_sing_2_clusters, 
+                                   dmatrix=dis_matrix)
+
+
+plot_avg_agnes <- plot(sil_agnes_2_clusters, border = NA, main="Average linkage")
+plot_single <- plot(sil_agnes_single_2_clusters, border = NA, main = "Single Linkage")
+plot_complete <- plot(sil_agnes_complete_2_clusters, border = NA,  main = "Complete Linkage")
+```
+
+Let us also compare the average silhouette width for different number of clusters. Here we will compare the results for average linkage method.
+```{r, echo=FALSE}
+credit_risk_avg_3_clusters <- cutree(credit_risk_avg, k=3)
+credit_risk_avg_4_clusters <- cutree(credit_risk_avg, k=4)
+
+sil_agnes_k2 <- silhouette(x=credit_risk_avg_2_clusters, dist=dis_matrix)
+sil_agnes_k3<- silhouette(x=credit_risk_avg_3_clusters, dist=dis_matrix)
+sil_agnes_k4 <- silhouette(x=credit_risk_avg_4_clusters, dist=dis_matrix)
+
+avg_sil_agnes_k2 <- summary(sil_agnes_k2)$clus.avg.widths
+avg_sil_agnes_k3 <- summary(sil_agnes_k3)$clus.avg.widths
+avg_sil_agnes_k4 <- summary(sil_agnes_k4)$clus.avg.widths
+
+mean_avg_sil_agnes_k2 <- mean(avg_sil_agnes_k2)
+mean_avg_sil_agnes_k3 <- mean(avg_sil_agnes_k3)
+mean_avg_sil_agnes_k4 <- mean(avg_sil_agnes_k4)
+
+
+silhouette_table <- data.frame(
+  Number_of_Clusters = c(2, 3, 4),
+  Mean_Silhouette_Width = c(mean_avg_sil_agnes_k2, mean_avg_sil_agnes_k3, mean_avg_sil_agnes_k4)
+)
+
+silhouette_table
+```
+The results show that the best average silhouette width is obtained as the number of clusters decreases.
+
+
+#### Internal indices using clValid
+Let us see how does the analysis of internal indices looks using the \textit{clValid} package. We will check for what number of clusters (selecting from $2$ to $6$) the best solutions can be obtained. We will start from plotting the results for average linkage and then we will see the summary of the results for complete linkage as well as single linkage in that order.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+credit_risk_cl_valid <- credit_risk_encoded[, -48]
+
+# internal indices - average method
+
+internal_validation_agnes <- clValid(
+  credit_risk_cl_valid,
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "average",
+  maxitems = 1000)
+
+plot(internal_validation_agnes)
+
+
+# internal indices - complete method
+
+internal_validation_agnes_complete <- clValid(
+  credit_risk_cl_valid,
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "complete",
+  maxitems = 1000)
+
+summary(internal_validation_agnes_complete)
+
+
+# internal indices - single method
+
+internal_validation_agnes_single <- clValid(
+  credit_risk_cl_valid,
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "single",
+  maxitems = 1000)
+
+summary(internal_validation_agnes_single) #the highest silhouette
+
+#plot(internal_validation_agnes_single)
+```
+The results of internal indices analysis show that the best performance of AGNES clustering method can be obtained for two clusters. 
+
+#### External indices
+Finally we will check the external indices. We will consider the same indices as in case of K-means here and also in further analysis.
+
+Jaccard, rand and adjusted rand indices
+```{r, echo=FALSE, warning=FALSE}
+library(ClusterR)
+
+agnes_cluster_labels <- credit_risk_avg_2_clusters
+agnes_cluster_labels_single <- credit_risk_sing_2_clusters
+agnes_cluster_labels_complete <- credit_risk_compl_2_clusters
+
+
+jaccard_agnes <- external_validation(real_class_numeric, 
+                                     agnes_cluster_labels, "jaccard_index")
+rand_agnes <- external_validation(real_class_numeric, 
+                                  agnes_cluster_labels, "rand_index")
+adj_rand_agnes <- external_validation(real_class_numeric, 
+                                      agnes_cluster_labels, "adjusted_rand_index")
+
+jaccard_agnes_single <- external_validation(real_class_numeric, 
+                                            agnes_cluster_labels_single, "jaccard_index")
+rand_agnes_single <- external_validation(real_class_numeric, 
+                                         agnes_cluster_labels_single, "rand_index")
+adj_rand_agnes_single <- external_validation(real_class_numeric, 
+                                             agnes_cluster_labels_single, "adjusted_rand_index")
+
+jaccard_agnes_complete <- external_validation(real_class_numeric, 
+                                              agnes_cluster_labels_complete, "jaccard_index")
+rand_agnes_complete <- external_validation(real_class_numeric, 
+                                           agnes_cluster_labels_complete, "rand_index")
+adj_rand_agnes_complete <- external_validation(real_class_numeric, 
+                                               agnes_cluster_labels_complete, "adjusted_rand_index")
+
+
+results_agnes <- data.frame(
+  Jaccard_Index = c(jaccard_agnes, jaccard_agnes_single, jaccard_agnes_complete),
+  Rand_Index = c(rand_agnes, rand_agnes_single, rand_agnes_complete),
+  Adjusted_Rand_Index = c(adj_rand_agnes, adj_rand_agnes_single, adj_rand_agnes_complete)
+)
+
+rownames(results_agnes) <- c("AGNES: average linkage", 
+                             "AGNES: single linkage", 
+                             "AGNES: complete linkage")
+results_agnes
+```
+We can see that the highest values of external indices, specifically considering Jaccard and Rand indices were obtained for single linkage method and selection of $2$ clusters.
+
+
+### DIANA
+Moving on to the other hierarchical clustering method, which is a divisive method called DIANA. We will consider  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.height=8.5, fig.width=10}
+diana_all_features <- diana(x=dis_matrix, diss=TRUE, stand=FALSE)
+par(cex = 0.4)
+par(lwd = 2)    
+
+plot(diana_all_features, which.plot = 2, main = "DIANA Dendrogram", 
+     sub = NULL)
+
+# We cut off the dendrogram
+diana_2_clusters <- cutree(diana_all_features, k=2)
+diana_3_clusters <- cutree(diana_all_features, k=3)
+diana_4_clusters <- cutree(diana_all_features, k=4)
+```
+
+
+#### Validation
+##### Internal indices
+Similarly as in previous cases we start the validation of DIANA clustering from internal indices. Firstly let us plot the silhouette index.
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+sil_diana_all_features <- silhouette(x=diana_2_clusters,
+                                     dmatrix=dis_matrix)
+
+sil_diana_3_clusters <- silhouette(x=diana_3_clusters,
+                                     dmatrix=dis_matrix)
+
+sil_diana_4_clusters <- silhouette(x=diana_4_clusters,
+                                     dmatrix=dis_matrix)
+
+#plot silhouette for different number of clusters
+plot(sil_diana_all_features, 
+     border = NA, 
+     main="Silhouette plot - DIANA")
+
+plot(sil_diana_3_clusters, 
+     border = NA, 
+     main="Silhouette plot - DIANA")
+
+plot(sil_diana_4_clusters, 
+     border = NA, 
+     main="Silhouette plot - DIANA")
+```
+The values of Average Silhouette width for each number of clusters are extremely low.
+
+
+##### Internal indices using clValid
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+
+internal_validation_diana_all <- clValid(
+  credit_risk_cl_valid,
+  nClust=2:20,
+  clMethods = c("diana"),
+  validation = "internal",
+  maxitems = 1000)
+
+#summary(internal_validation_diana_all)
+
+plot(internal_validation_diana_all)
+```
+We can see that the Dunn index grows as the number of clusters increases. Silhouette index gives the best results if we stay at the level of two clusters. The same in case of Connectivity.
+
+
+##### External indices
+We can check the performance of DIANA for different number of clusters using following external indices.
+
+Jaccard, rand and adjusted rand indices
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ClusterR)
+
+jaccard_diana <- external_validation(real_class_numeric, 
+                                     diana_2_clusters, "jaccard_index")
+rand_diana <- external_validation(real_class_numeric, 
+                                  diana_2_clusters, "rand_index")
+adj_rand_diana <- external_validation(real_class_numeric, 
+                                      diana_2_clusters, "adjusted_rand_index")
+
+jaccard_diana_2 <- external_validation(real_class_numeric, 
+                                     diana_3_clusters, "jaccard_index")
+rand_diana_2 <- external_validation(real_class_numeric, 
+                                  diana_3_clusters, "rand_index")
+adj_rand_diana_2 <- external_validation(real_class_numeric, 
+                                      diana_3_clusters, "adjusted_rand_index")
+
+jaccard_diana_3 <- external_validation(real_class_numeric, 
+                                     diana_4_clusters, "jaccard_index")
+rand_diana_3 <- external_validation(real_class_numeric, 
+                                  diana_4_clusters, "rand_index")
+adj_rand_diana_3 <- external_validation(real_class_numeric, 
+                                      diana_4_clusters, "adjusted_rand_index")
+
+results_diana <- data.frame(
+  Jaccard_Index = c(jaccard_diana, jaccard_diana_2, jaccard_diana_3),
+  Rand_Index = c(rand_diana, rand_diana_2, rand_diana_3),
+  Adjusted_Rand_Index = c(adj_rand_diana, adj_rand_diana_2, adj_rand_diana_3)
+)
+
+rownames(results_diana) <- c("DIANA: 2 clusters", "DIANA: 3 clusters", "DIANA: 4 clusters")
+results_diana
+```
+Comparing all the results using external indices we can say that the highest values of \textit{Jaccard index} as well as \textit{Rand index} were obtained for DIANA with $2$ clusters selection.
+
+## Fuzzy clustering
+Now we will perform clustering using fuzzy c-means algorithm.
+We will consider only numeric features.
+
+### Fuzzy C-means
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(e1071)
+cluster_cmeans <- cmeans(credit_numeric_features, centers = 2, m = 2)
+#cluster_cmeans$cluster
+```
+
+#### Validation
+
+Silhouette index for fuzzy c-means validation.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+Xca <- as.matrix(credit_numeric_features)
+sil_c_means <- SIL.F(Xca, cluster_cmeans$membership)
+sil_c_means
+```
+
+##### Internal indices using clValid
+
+Another internal validation indices looks as follows.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Compute clValid
+clmethods <- c("fanny")
+intern <- clValid(credit_numeric_features, nClust = 2:6, maxitems = 1000,
+                  clMethods = clmethods, validation = "internal")
+# Summary
+#summary(intern)
+```
+
+Now we can check performance using Jaccard and Rand indices.
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+cluster_cmeans_labels <- cluster_cmeans$cluster
+cluster_cmeans_labels <- as.numeric(as.character(cluster_cmeans_labels))
+
+cmeans_jaccard <- external_validation(real_class_numeric, cluster_cmeans_labels, method = "jaccard_index")
+cmeans_rand <- external_validation(real_class_numeric, cluster_cmeans_labels, method = "rand_index")
+cmeans_adj_rand <- external_validation(real_class_numeric, cluster_cmeans_labels, method = "adjusted_rand_index")
+
+cmeans_results <- data.frame(
+  Jaccard_Index = cmeans_jaccard,
+  Rand_Index = cmeans_rand,
+  Adjusted_Rand_Index = cmeans_adj_rand
+)
+
+rownames(cmeans_results) <- "C-Means"
+cmeans_results
+```
+
+## Density-based clustering
+
+### DSBCAN
+Now we will perform clustering using DBSCAN algorithm which is a density based method.
+Firstly we will consider only numeric and than all features.
+
+Starting with only numeric features case with different values of $\epsilon$ we obtain clusters in the following form:
+
+```{r, echo=FALSE, warning=FALSE, message=TRUE, fig.align='center'}
+library(dbscan)
+
+kNNdistplot(credit_numeric_features, k = 2)
+
+db_1 <- dbscan(credit_numeric_features, eps = 100)
+db_2 <- dbscan(credit_numeric_features, eps = 200)
+db_3 <- dbscan(credit_numeric_features, eps = 300)
+db_4 <- dbscan(credit_numeric_features, eps = 400)
+
+plot_1 = fviz_cluster(db_1, credit_numeric_features, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 100$)"))
+plot_2 = fviz_cluster(db_2, credit_numeric_features, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 200$)"))
+plot_3 = fviz_cluster(db_3, credit_numeric_features, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 300$)"))
+plot_4 = fviz_cluster(db_4, credit_numeric_features, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 400$)"))
+ggarrange(plot_1, plot_2, plot_3, plot_4, ncol = 2, nrow = 2)
+```
+
+
+#### Validation 
+
+Now we will check performance of DBSCAN using silhouette indices:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+dbscan_results <- list(db_1, db_2, db_3, db_4)
+
+plot_silhouette <- function(dbscan_result, title) {
+  zeros_indexes <- which(dbscan_result$cluster == 0)
+  clusters <- dbscan_result$cluster[-zeros_indexes]
+  credit_numeric_features_new <- credit_numeric_features[-zeros_indexes, ]
+  
+  silhouette_index <- silhouette(clusters, 
+                                 dist(credit_numeric_features_new))
+  
+  par(mfrow=c(1,1))
+  plot(silhouette_index, main = title, border=NA)
+}
+
+for (i in seq_along(dbscan_results)) {
+  plot_silhouette(dbscan_results[[i]], paste("DBSCAN Result ", i))
+}
+```
+
+
+##### Internal indices - Dunn index
+
+Now we will check performance using Dunn index.
+
+```{r, echo=FALSE, warning=FALSE, message=TRUE, fig.align='center'}
+cluster_labels_1 <- db_1$cluster
+cluster_labels_2 <- db_2$cluster
+cluster_labels_3 <- db_3$cluster
+cluster_labels_4 <- db_4$cluster
+
+dist_matrix <- dist(credit_numeric_features, method = "euclidean")
+
+cluster_stats_1 <- cluster.stats(dist_matrix, cluster_labels_1)
+cluster_stats_2 <- cluster.stats(dist_matrix, cluster_labels_2)
+cluster_stats_3 <- cluster.stats(dist_matrix, cluster_labels_3)
+cluster_stats_4 <- cluster.stats(dist_matrix, cluster_labels_4)
+
+dunn_index_1 <- cluster_stats_1$dunn
+dunn_index_2 <- cluster_stats_2$dunn
+dunn_index_3 <- cluster_stats_3$dunn
+dunn_index_4 <- cluster_stats_4$dunn
+
+dunn_indices <- c(dunn_index_1, dunn_index_2, dunn_index_3, dunn_index_4)
+
+dunn_results <- data.frame(Dunn_Index = dunn_indices)
+
+rownames(dunn_results) <- c("DBSCAN_1", "DBSCAN_2", "DBSCAN_3", "DBSCAN_4")
+
+dunn_results
+```
+
+
+##### External indices
+
+Validation using external indeces looks as follows.
+
+```{r, echo=FALSE, warning=FALSE, message=TRUE, fig.align='center'}
+# jaccard, rand
+dbscan_jaccard_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "jaccard_index")
+dbscan_rand_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "rand_index")
+dbscan_adj_rand_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "adjusted_rand_index")
+
+dbscan_jaccard_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "jaccard_index")
+dbscan_rand_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "rand_index")
+dbscan_adj_rand_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "adjusted_rand_index")
+
+dbscan_jaccard_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "jaccard_index")
+dbscan_rand_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "rand_index")
+dbscan_adj_rand_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "adjusted_rand_index")
+
+dbscan_jaccard_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "jaccard_index")
+dbscan_rand_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "rand_index")
+dbscan_adj_rand_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "adjusted_rand_index")
+
+
+results_dbscan <- data.frame(
+  Jaccard_Index = c(dbscan_jaccard_1, dbscan_jaccard_2, dbscan_jaccard_3, dbscan_jaccard_4),
+  Rand_Index = c(dbscan_rand_1, dbscan_rand_2, dbscan_rand_3, dbscan_rand_4),
+  Adjusted_Rand_Index = c(dbscan_adj_rand_1, dbscan_adj_rand_2, dbscan_adj_rand_3, dbscan_adj_rand_4)
+)
+
+rownames(results_dbscan) <- c("DBSCAN_1", "DBSCAN_2", "DBSCAN_3", "DBSCAN_4")
+colnames(results_dbscan) <- c("Jaccard_Index", "Rand_Index", "Adjusted_Rand_Index")
+
+results_dbscan
+```
+
+### Results for all features
+
+Now we will proceed analogous but this time for all features.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+kNNdistplot(credit_risk_cl_valid, k = 2)
+
+db_1 <- dbscan(credit_risk_cl_valid, eps = 100)
+db_2 <- dbscan(credit_risk_cl_valid, eps = 200)
+db_3 <- dbscan(credit_risk_cl_valid, eps = 300)
+db_4 <- dbscan(credit_risk_cl_valid, eps = 400)
+
+plot_1 = fviz_cluster(db_1, credit_risk_cl_valid, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 100$)"))
+plot_2 = fviz_cluster(db_2, credit_risk_cl_valid, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 200$)"))
+plot_3 = fviz_cluster(db_3, credit_risk_cl_valid, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 300$)"))
+plot_4 = fviz_cluster(db_4, credit_risk_cl_valid, geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 400$)"))
+ggarrange(plot_1, plot_2, plot_3, plot_4, ncol = 2, nrow = 2)
+```
+
+#### Validation
+
+In this case silhouette index looks as follows.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+#validation
+dbscan_results <- list(db_1, db_2, db_3, db_4)
+
+plot_silhouette <- function(dbscan_result, title) {
+  zeros_indexes <- which(dbscan_result$cluster == 0)
+  clusters <- dbscan_result$cluster[-zeros_indexes]
+  credit_risk_clust_new <- credit_risk_cl_valid[-zeros_indexes, ]
+  
+  silhouette_index <- silhouette(clusters, 
+                                 dist(credit_risk_clust_new))
+  
+  par(mfrow=c(1,1))
+  plot(silhouette_index, main = title, border=NA)
+}
+
+for (i in seq_along(dbscan_results)) {
+  plot_silhouette(dbscan_results[[i]], paste("DBSCAN Result ", i))
+}
+```
+
+##### Internal indices - Dunn index
+
+Dunn index looks as follows.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# dunn index
+
+cluster_labels_1 <- db_1$cluster
+cluster_labels_2 <- db_2$cluster
+cluster_labels_3 <- db_3$cluster
+cluster_labels_4 <- db_4$cluster
+
+dist_matrix <- dist(credit_risk_cl_valid, method = "euclidean")
+
+cluster_stats_1 <- cluster.stats(dist_matrix, cluster_labels_1)
+cluster_stats_2 <- cluster.stats(dist_matrix, cluster_labels_2)
+cluster_stats_3 <- cluster.stats(dist_matrix, cluster_labels_3)
+cluster_stats_4 <- cluster.stats(dist_matrix, cluster_labels_4)
+
+
+dunn_index_1 <- cluster_stats_1$dunn
+dunn_index_2 <- cluster_stats_2$dunn
+dunn_index_3 <- cluster_stats_3$dunn
+dunn_index_4 <- cluster_stats_4$dunn
+
+dunn_indices <- c(dunn_index_1, dunn_index_2, dunn_index_3, dunn_index_4)
+
+dunn_results <- data.frame(Dunn_Index = dunn_indices)
+
+rownames(dunn_results) <- c("DBSCAN_1", "DBSCAN_2", "DBSCAN_3", "DBSCAN_4")
+dunn_results
+```
+
+##### External indices
+
+Jaccard, rand and adjusted rand indices
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# jaccard, rand
+dbscan_jaccard_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "jaccard_index")
+dbscan_rand_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "rand_index")
+dbscan_adj_rand_1 <- external_validation(real_class_numeric, cluster_labels_1, method = "adjusted_rand_index")
+
+dbscan_jaccard_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "jaccard_index")
+dbscan_rand_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "rand_index")
+dbscan_adj_rand_2 <- external_validation(real_class_numeric, cluster_labels_2, method = "adjusted_rand_index")
+
+dbscan_jaccard_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "jaccard_index")
+dbscan_rand_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "rand_index")
+dbscan_adj_rand_3 <- external_validation(real_class_numeric, cluster_labels_3, method = "adjusted_rand_index")
+
+dbscan_jaccard_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "jaccard_index")
+dbscan_rand_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "rand_index")
+dbscan_adj_rand_4 <- external_validation(real_class_numeric, cluster_labels_4, method = "adjusted_rand_index")
+
+
+results_dbscan <- data.frame(
+  Jaccard_Index = c(dbscan_jaccard_1, dbscan_jaccard_2, dbscan_jaccard_3, dbscan_jaccard_4),
+  Rand_Index = c(dbscan_rand_1, dbscan_rand_2, dbscan_rand_3, dbscan_rand_4),
+  Adjusted_Rand_Index = c(dbscan_adj_rand_1, dbscan_adj_rand_2, dbscan_adj_rand_3, dbscan_adj_rand_4)
+)
+
+rownames(results_dbscan) <- c("DBSCAN_1", "DBSCAN_2", "DBSCAN_3", "DBSCAN_4")
+colnames(results_dbscan) <- c("Jaccard_Index", "Rand_Index", "Adjusted_Rand_Index")
+
+results_dbscan
+```
+
+
+# Dimensionality reduction
+In case of dimensionality reduction we are going to perform Factor analysis of mixed data (FAMD), because we have a lot of qualitative features. Hence we will compare the results obtained during classification and clustering analysis without dimensionality reduction with those after feature selection. 
+
+In order to apply Factor analysis of mixed data we can use FAMD method from \textit{FactoMineR} package.
+
+
+```{r, echo=TRUE, warning=FALSE}
+result_famd <- FAMD(credit_risk[,1:20], graph = FALSE)
+fviz_screeplot(result_famd)
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# Plot of variables
+fviz_famd_var(result_famd, repel = TRUE)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# Contribution to the first dimension
+fviz_contrib(result_famd, "var", axes = 1)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# Contribution to the second dimension
+fviz_contrib(result_famd, "var", axes = 2)
+```
+
+
+
+```{r, echo = FALSE, warning=FALSE}
+quantitative_vars <- get_famd_var(result_famd, "quanti.var")
+fviz_famd_var(result_famd, "quanti.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              repel = TRUE)
+
+```
+
+
+```{r, echo = FALSE, warning=FALSE}
+qualitative_vars <- get_famd_var(result_famd, "quali.var")
+fviz_famd_var(result_famd, "quali.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+
+```
+
+
+In order to perform Classification and cluster analysis we will create new data set obtained from FAMD.
+
+```{r, echo = FALSE, warning=FALSE}
+credit_risk_FAMD <- data.frame(result_famd$ind$coord, Response)
+head(credit_risk_FAMD)
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+train_index <- createDataPartition(y=Response, times=1, p = 0.7, list = FALSE)
+train_set_FAMD <- credit_risk_FAMD[train_index,]
+test_set_FAMD <- credit_risk_FAMD[-train_index,]
+```
+
+
+## Classification with dimensionality reduction
+
+Now we will perform classification analogically as before but this time using dataset after dimensionality reduction.
+
+### Classification tree
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+
+class_tree_FAMD <- rpart(Response ~., data = train_set_FAMD)
+rpart.plot(class_tree_FAMD, main="Classification Tree")
+
+# Predict
+test_set_pred_FAMD <- predict(class_tree_FAMD, test_set_FAMD, type = "class")
+
+# Confusion matrix
+confusion_matrix_test_FAMD <- table(test_set_pred_FAMD, test_set_FAMD$Response)
+confusion_matrix_test_FAMD
+```
+
+Accuracy
+```{r, echo=FALSE, warning=FALSE}
+# Accuracy
+accuracy_test_tree_FAMD <- sum(diag(confusion_matrix_test_FAMD)) / sum(confusion_matrix_test_FAMD)
+accuracy_test_tree_FAMD <- round(accuracy_test_tree_FAMD, 4)
+accuracy_test_tree_FAMD
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+tree_complex_FAMD <- rpart(Response ~., 
+                      data=train_set_FAMD, 
+                      control=rpart.control(cp=.01, minsplit=5, maxdepth=20))
+
+rpart.plot(tree_complex_FAMD)
+```
+
+### Random forest
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+random_forest_FAMD <- randomForest(Response~., 
+                       data = train_set_FAMD, 
+                       ntree = 200,
+                       importance=TRUE, 
+                       proximity=TRUE)
+
+
+test_set_rf_pred_FAMD <- predict(random_forest_FAMD, test_set_FAMD, type="class")
+confusion_matrix_test_rf_FAMD <- table(test_set_rf_pred_FAMD, test_set_FAMD$Response)
+confusion_matrix_test_rf_FAMD
+```
+
+Accuracy
+```{r, echo=FALSE, warning=FALSE}
+accuracy_rf_FAMD <- sum(diag(confusion_matrix_test_rf_FAMD)) / sum(confusion_matrix_test_rf_FAMD)
+accuracy_rf_FAMD <- round(accuracy_rf_FAMD, 4)
+accuracy_rf_FAMD
+```
+
+### LDA
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+LDA_FAMD <- lda(Response~.,
+                       data=train_set_FAMD)
+
+predict_lda_FAMD <- predict(LDA_FAMD, test_set_FAMD)
+class_lda_FAMD <- predict_lda_FAMD$class
+
+(conf_matrix_lda_FAMD <- table(class_lda_FAMD, test_set_FAMD$Response))
+
+#accuracy
+accuracy_lda_FAMD <- sum(diag(conf_matrix_lda_FAMD)) / sum(conf_matrix_lda_FAMD)
+accuracy_lda_FAMD <- round(accuracy_lda_FAMD, 4)
+accuracy_lda_FAMD
+```
+
+### QDA
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+QDA_FAMD <- qda(Response~.,
+                   data=train_set_FAMD)
+
+#predict
+predict_qda_FAMD <- predict(QDA_FAMD, test_set_FAMD)
+class_qda_FAMD <- predict_qda_FAMD$class
+
+#conf matrix
+(conf_matrix_qda_FAMD <- table(class_qda_FAMD, test_set_FAMD$Response))
+
+#accuracy
+accuracy_qda_FAMD <- sum(diag(conf_matrix_qda_FAMD)) / sum(conf_matrix_qda_FAMD)
+accuracy_qda_FAMD <- round(accuracy_qda_FAMD, 4)
+accuracy_qda_FAMD
+```
+
+### Logistic Regression
+
+```{r, echo=FALSE, warning=FALSE}
+logistic_regression_model_FAMD = train(
+  form = Response ~ .,
+  data = train_set_FAMD,
+  method = "glm",
+  preProcess = c("center", "scale"),
+  family = "binomial"
+)  
+
+
+accuracy_lr_FAMD <- calculate_accuracy(actual = test_set_FAMD$Response,
+                                      predicted = predict(logistic_regression_model_FAMD, newdata = test_set_FAMD))
+accuracy_lr_FAMD <- round(accuracy_lr_FAMD, 4)
+accuracy_lr_FAMD
+```
+
+### K-NN 
+
+```{r, echo=FALSE, warning=FALSE}
+set.seed(123)
+knn_model_FAMD = train(
+  form = Response ~ .,
+  data = train_set_FAMD,
+  trControl = trainControl(method = "cv", number = 10),
+  method = "knn",
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(k = seq(1, 50, by = 1))
+)
+
+ggplot(knn_model_FAMD) + theme_bw()
+```
+
+```{r, echo=FALSE, warning=FALSE}
+knn_model_FAMD$bestTune
+```
+
+```{r, echo=FALSE, warning=FALSE}
+accuracy_knn_FAMD <- calculate_accuracy(actual = test_set_FAMD$Response,
+                                       predicted = predict(knn_model_FAMD, newdata = test_set_FAMD))
+
+accuracy_knn_FAMD <- round(accuracy_knn_FAMD, 4)
+accuracy_knn_FAMD
+```
+
+
+### Accuracy of all models
+
+```{r, echo=FALSE, warning=FALSE}
+accuracy_values_FAMD <- c(
+  accuracy_test_tree_FAMD, accuracy_rf_FAMD,
+  accuracy_lda_FAMD, accuracy_qda_FAMD, accuracy_lr_FAMD, accuracy_knn_FAMD
+)
+
+# Create a data frame with row names and accuracy values
+accuracy_df_FAMD <- data.frame(Method = c("Classification tree", "Random forest", "LDA", "QDA",
+                                     "Logistic regression", "k-NN"),
+                          Accuracy = accuracy_values_FAMD)
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+knitr::kable(accuracy_df_FAMD,
+             format = 'html',
+             col.names = c("Method", "Accuracy"),
+             caption = 'Accuracy assessment for all variables') %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, width = "10em") %>%
+  column_spec(2, width = "7em") 
+```
+
+
+## Clustering analysis
+
+Now we will perform cluster analysis analogically as before but this time using dataset after dimensionality reduction.
+
+
+```{r, echo=FALSE, warning=FALSE}
+kNNdistplot(credit_risk_FAMD[,1:5], k = 2)
+
+db_FAMD_1 <- dbscan(credit_risk_FAMD[,1:5], eps = 1)
+db_FAMD_2 <- dbscan(credit_risk_FAMD[,1:5], eps = 1.5)
+db_FAMD_3 <- dbscan(credit_risk_FAMD[,1:5], eps = 2)
+db_FAMD_4 <- dbscan(credit_risk_FAMD[,1:5], eps = 2.5)
+
+plot_1_FAMD = fviz_cluster(db_FAMD_1, credit_risk_FAMD[,1:5], geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 1$)"))
+plot_2_FAMD = fviz_cluster(db_FAMD_2, credit_risk_FAMD[,1:5], geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 1.5$)"))
+plot_3_FAMD = fviz_cluster(db_FAMD_3, credit_risk_FAMD[,1:5], geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 2$)"))
+plot_4_FAMD = fviz_cluster(db_FAMD_4, credit_risk_FAMD[,1:5], geom = "point") + 
+  ggtitle(TeX(r"($\epsilon = 2.5$)"))
+ggarrange(plot_1_FAMD, plot_2_FAMD, plot_3_FAMD, plot_4_FAMD, ncol = 2, nrow = 2)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+cluster_labels_FAMD_1 <- db_FAMD_1$cluster
+cluster_labels_FAMD_2 <- db_FAMD_2$cluster
+cluster_labels_FAMD_3 <- db_FAMD_3$cluster
+cluster_labels_FAMD_4 <- db_FAMD_4$cluster
+
+dist_matrix_FAMD <- dist(credit_risk_FAMD[,1:5], method = "euclidean")
+
+cluster_stats_FAMD_1 <- cluster.stats(dist_matrix_FAMD, cluster_labels_FAMD_1)
+cluster_stats_FAMD_2 <- cluster.stats(dist_matrix_FAMD, cluster_labels_FAMD_2)
+cluster_stats_FAMD_3 <- cluster.stats(dist_matrix_FAMD, cluster_labels_FAMD_3)
+cluster_stats_FAMD_4 <- cluster.stats(dist_matrix_FAMD, cluster_labels_FAMD_4)
+
+dunn_index_FAMD_1 <- cluster_stats_FAMD_1$dunn
+dunn_index_FAMD_2 <- cluster_stats_FAMD_2$dunn
+dunn_index_FAMD_3 <- cluster_stats_FAMD_3$dunn
+dunn_index_FAMD_4 <- cluster_stats_FAMD_4$dunn
+
+dunn_index_FAMD_1
+dunn_index_FAMD_2
+dunn_index_FAMD_3
+dunn_index_FAMD_4
+
+real_labels_FAMD <- as.numeric(as.character(credit_risk_FAMD[,6]))
+
+
+dbscan_jaccard_FAMD_1 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_1, 
+                                        method = "jaccard_index")
+dbscan_rand_FAMD_1 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_1, 
+                                     method = "rand_index")
+dbscan_adj_rand_FAMD_1 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_1, 
+                                         method = "adjusted_rand_index")
+
+dbscan_jaccard_FAMD_2 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_2, 
+                                        method = "jaccard_index")
+dbscan_rand_FAMD_2 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_2, 
+                                     method = "rand_index")
+dbscan_adj_rand_FAMD_2 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_2, 
+                                         method = "adjusted_rand_index")
+
+dbscan_jaccard_FAMD_3 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_3, 
+                                        method = "jaccard_index")
+dbscan_rand_FAMD_3 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_3, 
+                                     method = "rand_index")
+dbscan_adj_rand_FAMD_3 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_3, 
+                                         method = "adjusted_rand_index")
+
+dbscan_jaccard_FAMD_4 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_4,
+                                         method = "jaccard_index")
+dbscan_rand_FAMD_4 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_4, 
+                                        method = "rand_index")
+dbscan_adj_rand_FAMD_4 <- external_validation(real_labels_FAMD, cluster_labels_FAMD_4, 
+                                         method = "adjusted_rand_index")
+
+
+dbscan_jaccard_FAMD_1
+dbscan_rand_FAMD_1
+dbscan_adj_rand_FAMD_1
+
+dbscan_jaccard_FAMD_2
+dbscan_rand_FAMD_2
+dbscan_adj_rand_FAMD_2
+
+dbscan_jaccard_FAMD_3
+dbscan_rand_FAMD_3
+dbscan_adj_rand_FAMD_3
+
+dbscan_jaccard_FAMD_4
+dbscan_rand_FAMD_4
+dbscan_adj_rand_FAMD_4
+```
+
+
+### K-MEANS
+
+```{r, echo=FALSE, warning=FALSE}
+# without standarization
+kmeans_credit_k_2_FAMD <- kmeans(credit_risk_FAMD[,1:5], 
+                                          centers = 2)
+kmeans_labelst_k_2_FAMD <- kmeans_credit_k_2_FAMD$cluster
+cluster_vis_FAMD <- fviz_cluster(kmeans_credit_k_2_FAMD, 
+                                     credit_risk_FAMD[,1:5], 
+                                     main = "K-means FAMD", stand=FALSE)
+
+cluster_vis_FAMD
+```
+
+
+
+#### Validation using clValid - internal indices
+```{r, echo=FALSE, warning=FALSE}
+rownames(credit_risk_FAMD[,1:5]) <- 1:nrow(credit_risk_FAMD[,1:5])
+
+internal_validation_FAMD <- clValid(
+  credit_risk_FAMD[,1:5],
+  nClust=2:6,
+  clMethods = c("kmeans"),
+  validation = "internal",
+  maxitems = 1000)
+
+summary(internal_validation_FAMD)
+
+plot(internal_validation_FAMD)
+
+compareMatchedClasses(credit_risk_FAMD[,1:5], credit_risk_FAMD[,6])$diag
+```
+
+
+
+
+### Hierarhical clustering 
+```{r, echo=FALSE, warning=FALSE}
+dissimilarities_FAMD <- daisy(credit_risk_FAMD[,1:5])
+dis_matrix_FAMD <- as.matrix(dissimilarities_FAMD)
+
+
+credit_risk_avg_FAMD       <- agnes(x=dis_matrix_FAMD, diss=TRUE, method="average")
+credit_risk_single_FAMD    <- agnes(x=dis_matrix_FAMD, diss=TRUE, method="single")
+credit_risk_complete_FAMD  <- agnes(x=dis_matrix_FAMD, diss=TRUE, method="complete")
+
+### cutting of the dendrogram
+
+credit_risk_avg_2_clusters_FAMD <- cutree(credit_risk_avg_FAMD, k=2)
+credit_risk_sing_2_clusters_FAMD <- cutree(credit_risk_single_FAMD, k=2)
+credit_risk_compl_2_clusters_FAMD <- cutree(credit_risk_complete_FAMD, k=2)
+
+
+internal_validation_agnes_FAMD <- clValid(
+  credit_risk_FAMD[,1:5],
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "average",
+  maxitems = 1000)
+
+summary(internal_validation_agnes_FAMD)
+
+plot(internal_validation_agnes_FAMD)
+
+
+# internal indices - complete method
+
+internal_validation_agnes_complete_FAMD <- clValid(
+  credit_risk_FAMD[,1:5],
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "complete",
+  maxitems = 1000)
+
+summary(internal_validation_agnes_complete_FAMD)
+
+
+
+# internal indices - single method 
+
+internal_validation_agnes_single_FAMD <- clValid(
+  credit_risk_FAMD[,1:5],
+  nClust=2:6,
+  clMethods = c("agnes"),
+  validation = "internal",
+  method = "single",
+  maxitems = 1000)
+
+summary(internal_validation_agnes_single_FAMD) #the highest silhouette
+
+plot(internal_validation_agnes_single_FAMD)
+```
+
+### Fuzzy c-means
+```{r, echo=FALSE, warning=FALSE}
+cluster_cmeans_FAMD <- cmeans(credit_risk_FAMD[,1:5], centers = 2, m = 2)
+
+
+Xca_FAMD <- as.matrix(credit_risk_FAMD[,1:5])
+sil_c_means_FAMD <- SIL.F(Xca_FAMD, cluster_cmeans_FAMD$membership)
+sil_c_means_FAMD
+
+
+# Compute clValid
+clmethods <- c("fanny")
+intern_FAMD <- clValid(credit_risk_FAMD[,1:5], nClust = 2:6, maxitems = 1000,
+                  clMethods = clmethods, validation = "internal")
+# Summary
+summary(intern_FAMD)
+
+
+cluster_cmeans_labels_FAMD <- cluster_cmeans_FAMD$cluster
+cluster_cmeans_labels_FAMD <- as.numeric(as.character(cluster_cmeans_labels_FAMD))
+
+real_labels_FAMD <- as.numeric(as.character(credit_risk_FAMD[,6]))
+
+
+cmeans_jaccard_FAMD <- external_validation(real_labels_FAMD, cluster_cmeans_labels_FAMD, method = "jaccard_index")
+cmeans_rand_FAMD <- external_validation(real_labels_FAMD, cluster_cmeans_labels_FAMD, method = "rand_index")
+cmeans_adj_rand_FAMD <- external_validation(real_labels_FAMD, cluster_cmeans_labels_FAMD, method = "adjusted_rand_index")
+
+
+cmeans_results_FAMD <- data.frame(
+  Jaccard_Index = cmeans_jaccard_FAMD,
+  Rand_Index = cmeans_rand_FAMD,
+  Adjusted_Rand_Index = cmeans_adj_rand_FAMD
+)
+
+rownames(cmeans_results_FAMD) <- "C-Means"
+cmeans_results_FAMD
+```
